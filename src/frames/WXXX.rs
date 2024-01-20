@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::common::Encoding;
+use super::common::{Encoding, Tape};
 
 pub struct WXXX {
     encoding: Encoding,
@@ -31,8 +31,15 @@ WXXX {{
         )
     }
 }
-// impl Frame for WXXX {
-//     fn get_date(&self) -> String {
-//         self.data.clone()
-//     }
-// }
+
+impl Tape for WXXX {
+    fn message(&self) -> String {
+        self.data.clone()
+    }
+    fn identifier(&self) -> String {
+        "WXXX".to_string()
+    }
+    fn raw(&self) -> Vec<u8> {
+        Vec::default()
+    }
+}

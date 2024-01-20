@@ -1,0 +1,5 @@
+/target
+*.mp3
+*.txt
+*.jpg
+/.DS_Store

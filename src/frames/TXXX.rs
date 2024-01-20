@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::common::Encoding;
+use super::common::{Encoding, Tape};
 
 pub struct TXXX {
     encoding: Encoding,
@@ -31,8 +31,14 @@ TXXX {{
         )
     }
 }
-// impl Frame for TXXX {
-//     fn get_date(&self) -> String {
-//         self.data.clone()
-//     }
-// }
+impl Tape for TXXX {
+    fn identifier(&self) -> String {
+        "TXXX".to_string()
+    }
+    fn message(&self) -> String {
+        self.data.clone()
+    }
+    fn raw(&self) -> Vec<u8> {
+        Vec::default()
+    }
+}

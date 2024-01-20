@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use super::common::Tape;
+
 pub struct RarelyUsed {
     identifier: String,
     payload: Vec<u8>,
@@ -24,5 +26,18 @@ RarelyUsed {{
 }}",
             self.identifier, self.payload
         )
+    }
+}
+impl Tape for RarelyUsed {
+    fn identifier(&self) -> String {
+        self.identifier.clone()
+    }
+
+    fn message(&self) -> String {
+        "null".to_string()
+    }
+
+    fn raw(&self) -> Vec<u8> {
+        self.payload.clone()
     }
 }

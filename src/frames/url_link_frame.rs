@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use super::common::Tape;
+
 pub struct URLLinkFrame {
     identifier: String,
     data: String,
@@ -21,5 +23,17 @@ impl Display for URLLinkFrame {
 }}",
             self.identifier, self.data
         )
+    }
+}
+
+impl Tape for URLLinkFrame {
+    fn identifier(&self) -> String {
+        self.identifier.clone()
+    }
+    fn message(&self) -> String {
+        self.data.clone()
+    }
+    fn raw(&self) -> Vec<u8> {
+        Vec::default()
     }
 }

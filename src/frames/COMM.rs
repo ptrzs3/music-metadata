@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::common::Encoding;
+use super::common::{Encoding, Tape};
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -40,14 +40,14 @@ COMM {{
     }
 }
 
-// impl Heavy for COMM {
-//     fn get_identifier(self) -> String {
-//         self.identifier
-//     }
-//     fn get_raw_data(self) -> Vec<u8> {
-//         self.data
-//     }
-//     fn get_addition(self) -> String {
-//         format!("language: {}, description: {}", self.language, self.description)
-//     }
-// }
+impl Tape for COMM {
+    fn identifier(&self) -> String {
+        self.identifier.clone()
+    }
+    fn message(&self) -> String {
+        self.description.clone()
+    }
+    fn raw(&self) -> Vec<u8> {
+        Vec::default()
+    }
+}

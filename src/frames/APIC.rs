@@ -1,6 +1,6 @@
 use std::{fmt::Display, fs, io, path::Path};
 
-use super::common::Encoding;
+use super::common::{Encoding, Tape};
 
 #[allow(non_snake_case)]
 #[allow(dead_code)]
@@ -49,27 +49,12 @@ APIC {{
     MIME_type: {},
     picture_type: {:?},
     description: {},
-    data: {:X?}
+    data: {:?} Bytes
 }}",
-            self.encoding, self.MIME_type, self.picture_type, self.description, self.data[0]
+            self.encoding, self.MIME_type, self.picture_type, self.description, self.data.len()
         )
     }
 }
-
-// impl Heavy for APIC {
-//     fn get_addition(self) -> String {
-//         format!(
-//             "MIME: {}, type: {:?}, description: {}",
-//             self.MIME_type, self.picture_type, self.description
-//         )
-//     }
-//     fn get_raw_data(self) -> Vec<u8> {
-//         self.data
-//     }
-//     fn get_identifier(self) -> String {
-//         "APIC".to_string()
-//     }
-// }
 
 #[derive(Debug)]
 pub enum PicType {
@@ -122,5 +107,17 @@ impl From<u8> for PicType {
             0x14 => PicType::PublisherOrStudioLogoType,
             _ => panic!("Invalid value for conversion to PicType"),
         }
+    }
+}
+
+impl Tape for APIC {
+    fn message(&self) -> String {
+        self.description.clone()
+    }
+    fn identifier(&self) -> String {
+        self.identifier.clone()
+    }
+    fn raw(&self) -> Vec<u8> {
+        self.data.clone()
     }
 }

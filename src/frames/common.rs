@@ -1,14 +1,3 @@
-pub trait Light {
-    fn get_identifier(self) -> String;
-    fn get_data(self) -> String;
-}
-
-pub trait Heavy {
-    fn get_identifier(self) -> String;
-    fn get_raw_data(self) -> Vec<u8>;
-    fn get_addition(self) -> String;
-}
-
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 pub enum Encoding {
@@ -17,4 +6,11 @@ pub enum Encoding {
     UTF16_WITH_BOM,
     UTF16_BE,
     UTF8,
+}
+
+pub trait Tape {
+    // 有些frame不止出现一次
+    fn identifier(&self) -> String;
+    fn message(&self) -> String;
+    fn raw(&self) -> Vec<u8>;
 }

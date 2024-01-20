@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::common::Encoding;
+use super::common::{Encoding, Tape};
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -55,5 +55,17 @@ SYLT {{
             self.description,
             self.data
         )
+    }
+}
+
+impl Tape for SYLT {
+    fn identifier(&self) -> String {
+        self.identifier.clone()
+    }
+    fn message(&self) -> String {
+        self.description.clone()
+    }
+    fn raw(&self) -> Vec<u8> {
+        self.data.clone()
     }
 }

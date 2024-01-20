@@ -1,4 +1,7 @@
+// 如果frame有description不定长字段，如果frame中为空，则设置为String::from("null")
+use self::common::{get_text, get_text_according_to_encoding};
 use crate::error::frame_error::FrameError;
+use crate::frames::common::Tape;
 use crate::frames::identifiers::{
     IDFactory, RarelyUsedFrameIdentifier, TextInformationFrameIdentifier, URLLinkFrameIdentifier,
 };
@@ -13,14 +16,107 @@ use crate::frames::USLT::USLT;
 use crate::frames::WXXX::WXXX;
 use crate::frames::{common::Encoding, header::FrameHeader};
 use crate::protocol_header::ProtocolHeader;
-use crate::reader::Buffer;
+use crate::reader::{Buffer, BufferReader};
 use crate::util;
 use crate::version::Version;
-use std::io;
+use std::collections::HashMap;
+use std::{io, fs};
+use std::path::Path;
 
-use self::common::{get_text, get_text_according_to_encoding};
+pub struct Parser<T> where T: AsRef<Path> {
+    fp: T,
+    hm: HashMap<String, usize>,
+    // 实现了Tape的特征对象
+    // 有些frame不止出现一次，使用二维数组，每一行（列）存储一类Frame
+    pub data: Vec<Vec<Box<dyn Tape>>>,
+}
 
-pub fn parse_protocol_header(header: &Buffer) -> io::Result<ProtocolHeader> {
+impl<T> Parser<T> where T: AsRef<Path> {
+    pub fn new(fp: T) -> Self {
+        Parser {
+            fp,
+            hm: HashMap::default(),
+            data: Vec::default(),
+        }
+    }
+    fn push(&mut self, v: Box<dyn Tape>) -> io::Result<()> {
+        if let Some(index) = self.hm.get(&v.identifier()) {
+            self.data[*index].push(v);
+        } else {
+            let index = self.data.len();
+            self.hm.insert(v.identifier(), index);
+            self.data.push(Vec::default());
+            self.data[index].push(v);
+        }
+        Ok(())
+    }
+    pub fn parse_file(&mut self) -> io::Result<()> {
+        let mut buffer_reader = BufferReader::new(&self.fp)?;
+
+        let mut buffer: Buffer;
+
+        buffer = buffer_reader.read_protocol_header_buffer()?;
+        let protocol_header = parse_protocol_header(&buffer)?;
+        println!("{}", protocol_header.to_string());
+
+        let mut start: u32 = 0;
+        while start < protocol_header.size {
+            buffer = buffer_reader.read_frame_header_buffer()?;
+            match parse_frame_header(&buffer, &protocol_header.major_version) {
+                Ok(v) => {
+                    buffer = buffer_reader.read_frame_payload_buffer(v.size)?;
+                    match parse_frame_payload(&buffer, &v) {
+                        Ok(v) => {
+                            self.push(v)?;
+                        },
+                        Err(e) => println!("{:?}", e)
+                    }
+                    start += 10 + v.size;
+                }
+                Err(e) => match e {
+                    FrameError::IsPadding => {
+                        println!("### Endding ###");
+                        return Ok(());
+                    }
+                    FrameError::Unimplement(id, skip) => {
+                        let buf = buffer_reader.skip(skip)?;
+                        start += 10 + skip;
+                        println!(
+                            "unimplement: {{
+identifier: {},
+raw: {:?}",
+                            id, buf
+                        );
+                    }
+                    FrameError::UnknownError(s) => {
+                        println!("{s}");
+                        println!("The parser is stopped");
+                        return Ok(());
+                    }
+                },
+            }
+        }
+        Ok(())
+    }
+
+    pub fn change_target(&mut self, new_fp: T) {
+        self.fp = new_fp;
+    }
+
+    pub fn write_image(&self) -> io::Result<()> {
+        let base_name: String = self.fp.as_ref().file_stem().unwrap().to_str().unwrap().to_string();
+        if let Some(index) = self.hm.get("APIC") {
+            for d in self.data[*index].iter() {
+                let fname = base_name.clone() + ".jpg";
+                fs::write(fname,d.raw())?
+            }
+        } else {
+            println!("NO APIC");
+        }
+        Ok(())
+    }
+}
+fn parse_protocol_header(header: &Buffer) -> io::Result<ProtocolHeader> {
     let header = ProtocolHeader {
         identifier: String::from_utf8_lossy(&header[..3]).into_owned(),
         major_version: {
@@ -37,7 +133,7 @@ pub fn parse_protocol_header(header: &Buffer) -> io::Result<ProtocolHeader> {
     Ok(header)
 }
 
-pub fn parse_frame_header(header: &Buffer, version: &Version) -> Result<FrameHeader, FrameError> {
+fn parse_frame_header(header: &Buffer, version: &Version) -> Result<FrameHeader, FrameError> {
     let frame_header = FrameHeader {
         identifier: IDFactory::from(header[0..=3].to_vec()),
         size: util::get_size(header[4..8].to_vec(), version),
@@ -53,53 +149,55 @@ pub fn parse_frame_header(header: &Buffer, version: &Version) -> Result<FrameHea
     Ok(frame_header)
 }
 
-pub fn parse_frame_payload(payload: &Buffer, header: &FrameHeader) -> Result<(), FrameError> {
-    let _ = match &header.identifier {
+fn parse_frame_payload(payload: &Buffer, header: &FrameHeader) -> Result<Box<dyn Tape>, FrameError> {
+    match &header.identifier {
         IDFactory::T(id) => {
             if let TextInformationFrameIdentifier::TXXX = id {
                 let txxx = parse_TXXX(payload.clone())?;
-                println!("{}", txxx)
+                return Ok(Box::new(txxx));
             } else {
-                let text_infomation_frame =
-                    parse_text_infomation_frame(header.identifier.to_string(), payload.clone())?;
-                println!("{}", text_infomation_frame);
+                let text_infomation_frame = parse_text_infomation_frame(
+                    header.identifier.to_string(),
+                    payload.clone(),
+                )?;
+                return Ok(Box::new(text_infomation_frame));
             }
         }
         IDFactory::W(id) => {
             if let URLLinkFrameIdentifier::WXXX = id {
                 let wxxx = parse_WXXX(payload.clone())?;
-                println!("{}", wxxx);
+                return Ok(Box::new(wxxx));
             } else {
                 let url_link_frame =
                     parse_url_link_frame(header.identifier.to_string(), payload.clone())?;
-                println!("{}", url_link_frame);
+                return Ok(Box::new(url_link_frame));
             }
         }
         IDFactory::APIC => {
             let apic = parse_APIC(payload.clone())?;
-            println!("{}", apic);
+            return Ok(Box::new(apic));
         }
         IDFactory::COMM => {
             let comm = parse_COMM(payload.clone())?;
-            println!("{}", comm);
+            return Ok(Box::new(comm));
         }
         IDFactory::USLT => {
             let uslt = parse_USLT(payload.clone())?;
-            println!("{}", uslt);
+            return Ok(Box::new(uslt));
         }
         IDFactory::SYLT => {
             let sylt = parse_SYLT(payload.clone())?;
-            println!("{}", sylt);
+            return Ok(Box::new(sylt));
         }
         IDFactory::R(_) => {
-            let rarely_used = parse_RarelyUsed(header.identifier.to_string(), payload.clone())?;
-            println!("{}", rarely_used);
+            let rarely_used =
+                parse_RarelyUsed(header.identifier.to_string(), payload.clone())?;
+            return Ok(Box::new(rarely_used));
         }
         _ => {
             panic!("Unexpected Error")
         }
-    };
-    Ok(())
+    }
 }
 
 #[allow(non_snake_case)]
@@ -160,7 +258,7 @@ fn parse_USLT(payload: Buffer) -> Result<USLT, FrameError> {
         data_encoding = common::refine_encoding(&payload[cursor..=cursor + 1]);
         cursor += 2;
     }
-    let (descriptor, skip): (String, usize) =
+    let (description, skip): (String, usize) =
         common::get_text_according_to_encoding(&payload[cursor..], &data_encoding)?;
     cursor += skip;
     if let Encoding::UTF16_WITH_BOM = frame_encoding {
@@ -168,7 +266,7 @@ fn parse_USLT(payload: Buffer) -> Result<USLT, FrameError> {
         cursor += 2;
     }
     let data = common::get_text(&data_encoding, &payload[cursor..])?;
-    Ok(USLT::new(data_encoding, language, descriptor, data.into()))
+    Ok(USLT::new(data_encoding, language, description, data.into()))
 }
 
 #[allow(non_snake_case)]
@@ -295,7 +393,7 @@ mod common {
     ) -> Result<(String, usize), FrameError> {
         let mut cursor: usize = 0;
         let mut text_vec: Vec<u8> = Vec::new();
-        let text: String;
+        let mut text: String;
         match encoding {
             Encoding::ISO_8859_1 => {
                 while cursor < payload.len() && payload[cursor] != 0 {
@@ -303,6 +401,9 @@ mod common {
                     cursor += 1;
                 }
                 text = util::latin1_to_string(&text_vec);
+                if text.len() == 0 {
+                    text = "null".to_string();
+                }
                 Ok((text, cursor + 1))
             }
             Encoding::UTF16_LE => {
@@ -311,6 +412,9 @@ mod common {
                     cursor += 1;
                 }
                 text = String::from_utf16(&util::into_big_endian_u16(&text_vec, true)?).expect("");
+                if text.len() == 0 {
+                    text = "null".to_string();
+                }
                 Ok((text, cursor + 2))
             }
             Encoding::UTF16_BE => {
@@ -319,6 +423,9 @@ mod common {
                     cursor += 1;
                 }
                 text = String::from_utf16(&util::into_big_endian_u16(&text_vec, false)?).expect("");
+                if text.len() == 0 {
+                    text = "null".to_string();
+                }
                 Ok((text, cursor + 2))
             }
             Encoding::UTF8 => {
@@ -327,6 +434,9 @@ mod common {
                     cursor += 1;
                 }
                 text = String::from_utf8(text_vec).expect("");
+                if text.len() == 0 {
+                    text = "null".to_string();
+                }
                 Ok((text, cursor + 1))
             }
             _ => Err(FrameError::UnknownError(

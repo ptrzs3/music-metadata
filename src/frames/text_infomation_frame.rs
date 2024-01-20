@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-// use super::common::Light;
+use super::common::Tape;
 
 pub struct TextInfomationFrame {
     identifier: String,
@@ -26,11 +26,14 @@ impl Display for TextInfomationFrame {
     }
 }
 
-// impl Light for TextInfomationFrame {
-//     fn get_data(self) -> String {
-//         self.data
-//     }
-//     fn get_identifier(self) -> String {
-//         self.identifier
-//     }
-// }
+impl Tape for TextInfomationFrame {
+    fn identifier(&self) -> String {
+        self.identifier.clone()
+    }
+    fn message(&self) -> String {
+        self.data.clone()
+    }
+    fn raw(&self) -> Vec<u8> {
+        Vec::default()
+    }
+}
