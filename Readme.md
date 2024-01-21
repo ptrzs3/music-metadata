@@ -34,7 +34,7 @@ fn main() -> std::io::Result<()> {
 
 ## License
 
-Apache License 2.0. See [LICENSE](https://github.com/ptrzs3/music-metadata/blob/main/LICENSE) file for details.
+Apache-2.0 License. See [LICENSE](https://github.com/ptrzs3/music-metadata/blob/main/LICENSE) file for details.
 
 ## Author
 

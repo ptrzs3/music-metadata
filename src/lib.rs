@@ -27,8 +27,7 @@ where
 {
     fp: T,
     hm: HashMap<String, usize>,
-    // 实现了Tape的特征对象
-    // 有些frame不止出现一次，使用二维数组，每一行（列）存储一类Frame
+    /// Some frames appear more than once
     pub data: Vec<Vec<Box<dyn Tape>>>,
 }
 
