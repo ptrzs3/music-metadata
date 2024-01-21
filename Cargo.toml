@@ -6,6 +6,7 @@ description = "A parser for id3v2.3, id3v2.4 and id3v1"
 keywords = ["id3v2", "id3v1", "id3", "mp3-metadata"]
 authors = ["ptrzs <ptrzsi386@outlook.com>"]
 license = "Apache-2.0"
+documentation = "https://docs.rs/music-metadata/latest/music_metadata/"
 homepage = "https://github.com/ptrzs3/music-metadata#readme"
 repository = "https://github.com/ptrzs3/music-metadata"
 
