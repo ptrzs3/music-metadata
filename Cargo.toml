@@ -5,7 +5,7 @@ edition = "2021"
 description = "A parser for id3v2.3, id3v2.4 and id3v1"
 keywords = ["id3v2", "id3v1", "id3", "mp3 metadata"]
 authors = ["ptrzs <ptrzs3@outlook.com>"]
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
