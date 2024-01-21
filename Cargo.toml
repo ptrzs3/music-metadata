@@ -1,6 +1,6 @@
 [package]
 name = "music-metadata"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A parser for id3v2.3, id3v2.4 and id3v1"
 keywords = ["id3v2", "id3v1", "id3", "mp3-metadata"]
