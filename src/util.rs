@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use crate::{error::frame_error::FrameError, frames::header::Byte, version::Version};
+use crate::{error::header_error::HeaderError, frames::header::Byte, version::Version};
 
 pub fn map_to_binary(decimal: &[u8]) -> Vec<Byte> {
     let mut result: Vec<Byte> = Vec::new();
@@ -31,7 +31,7 @@ pub fn get_size(size: Vec<u8>, v: &Version) -> u32 {
     }
 }
 
-pub fn into_big_endian_u16(text: &[u8], reverse: bool) -> Result<Vec<u16>, FrameError> {
+pub fn into_big_endian_u16(text: &[u8], reverse: bool) -> Result<Vec<u16>, HeaderError> {
     let mut big_endian_u16: Vec<u16> = Vec::new();
     match reverse {
         true => {

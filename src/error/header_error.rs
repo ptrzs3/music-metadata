@@ -1,5 +1,5 @@
 #[derive(Debug)]
-pub enum FrameError {
+pub enum HeaderError {
     Unimplement(String, u32),
     IsPadding,
     UnknownError(String),

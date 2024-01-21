@@ -7,7 +7,7 @@ mod reader;
 mod util;
 mod version;
 
-use error::frame_error::FrameError;
+use error::header_error::HeaderError;
 use frames::common::Tape;
 use frames::header::FrameHeader;
 use frames::identifiers::{
@@ -17,6 +17,7 @@ use protocol_header::ProtocolHeader;
 use reader::{Buffer, BufferReader};
 use version::Version;
 use std::collections::HashMap;
+use std::fs::File;
 use std::path::Path;
 use std::{fs, io};
 
@@ -29,6 +30,7 @@ where
     hm: HashMap<String, usize>,
     /// Some frames appear more than once
     pub data: Vec<Vec<Box<dyn Tape>>>,
+    size: u64
 }
 
 impl<T> Parser<T>
@@ -36,12 +38,14 @@ where
     T: AsRef<Path>,
 {
     /// create a new parser
-    pub fn new(fp: T) -> Self {
-        Parser {
+    pub fn new(fp: T) -> io::Result<Self> {
+        let sz = File::open(&fp)?.metadata()?.len();
+        Ok(Parser {
             fp,
             hm: HashMap::default(),
             data: Vec::default(),
-        }
+            size: sz
+        })
     }
 
     /// Return frame content that after decoding
@@ -84,16 +88,19 @@ where
         Ok(())
     }
 
-    /// start parse
-    pub fn parse_file(&mut self) -> io::Result<()> {
+    /// start parse id3
+    pub fn parse_id3(&mut self) -> io::Result<()> {
         let mut buffer_reader = BufferReader::new(&self.fp)?;
 
         let mut buffer: Buffer;
 
         buffer = buffer_reader.read_protocol_header_buffer()?;
-        let protocol_header = parse_protocol_header(&buffer)?;
-        println!("{}", protocol_header.to_string());
-
+        let rst = parse_protocol_header(&buffer);
+        if let Err(_) = rst {
+            println!("not include ID3v2.3 or ID3v2.4");
+            return Ok(());
+        }
+        let protocol_header = rst.unwrap();
         let mut start: u32 = 0;
         while start < protocol_header.size {
             buffer = buffer_reader.read_frame_header_buffer()?;
@@ -109,11 +116,11 @@ where
                     start += 10 + v.size;
                 }
                 Err(e) => match e {
-                    FrameError::IsPadding => {
+                    HeaderError::IsPadding => {
                         println!("### Endding ###");
                         return Ok(());
                     }
-                    FrameError::Unimplement(id, skip) => {
+                    HeaderError::Unimplement(id, skip) => {
                         let buf = buffer_reader.skip(skip)?;
                         start += 10 + skip;
                         println!(
@@ -123,7 +130,7 @@ raw: {:?}",
                             id, buf
                         );
                     }
-                    FrameError::UnknownError(s) => {
+                    HeaderError::UnknownError(s) => {
                         println!("{s}");
                         println!("The parser is stopped");
                         return Ok(());
@@ -161,14 +168,16 @@ raw: {:?}",
         Ok(())
     }
 }
-fn parse_protocol_header(header: &Buffer) -> io::Result<ProtocolHeader> {
+fn parse_protocol_header(header: &Buffer) -> Result<ProtocolHeader, HeaderError> {
     let header = ProtocolHeader {
         identifier: String::from_utf8_lossy(&header[..3]).into_owned(),
         major_version: {
-            if header[3] == 3 {
+            if header[0..=3] == [0x49, 0x44, 0x33, 0x03] {
                 Version::V3
-            } else {
+            } else if header[0..=3] == [0x49, 0x44, 0x33, 0x04] {
                 Version::V4
+            } else {
+                return Err(HeaderError::Unimplement("Wrong Header".to_string(), 1));
             }
         },
         revision: header[4],
@@ -178,7 +187,7 @@ fn parse_protocol_header(header: &Buffer) -> io::Result<ProtocolHeader> {
     Ok(header)
 }
 
-fn parse_frame_header(header: &Buffer, version: &Version) -> Result<FrameHeader, FrameError> {
+fn parse_frame_header(header: &Buffer, version: &Version) -> Result<FrameHeader, HeaderError> {
     let frame_header = FrameHeader {
         identifier: IDFactory::from(header[0..=3].to_vec()),
         size: util::get_size(header[4..8].to_vec(), version),
@@ -186,10 +195,10 @@ fn parse_frame_header(header: &Buffer, version: &Version) -> Result<FrameHeader,
         version: version.clone(),
     };
     if let IDFactory::R(RarelyUsedFrameIdentifier::UNIMPLEMENT(id)) = frame_header.identifier {
-        return Err(FrameError::Unimplement(id, frame_header.size));
+        return Err(HeaderError::Unimplement(id, frame_header.size));
     }
     if let IDFactory::PADDING = frame_header.identifier {
-        return Err(FrameError::IsPadding);
+        return Err(HeaderError::IsPadding);
     }
     Ok(frame_header)
 }
@@ -197,7 +206,7 @@ fn parse_frame_header(header: &Buffer, version: &Version) -> Result<FrameHeader,
 fn parse_frame_payload(
     payload: &Buffer,
     header: &FrameHeader,
-) -> Result<Box<dyn Tape>, FrameError> {
+) -> Result<Box<dyn Tape>, HeaderError> {
     match &header.identifier {
         IDFactory::T(id) => {
             if let TextInformationFrameIdentifier::TXXX = id {
@@ -250,7 +259,7 @@ fn parse_frame_payload(
 
 mod worker {
     use crate::{
-        error::frame_error::FrameError,
+        error::header_error::HeaderError,
         frames::{
             common::Encoding,
             rarely_used::RarelyUsed,
@@ -272,7 +281,7 @@ mod worker {
     pub fn parse_text_infomation_frame(
         identifier: String,
         payload: Buffer,
-    ) -> Result<TextInfomationFrame, FrameError> {
+    ) -> Result<TextInfomationFrame, HeaderError> {
         let mut encoding = common::get_encoding(payload[0])?;
         let mut cursor: usize = 1;
         if let Encoding::UTF16_WITH_BOM = encoding {
@@ -286,13 +295,13 @@ mod worker {
     pub fn parse_url_link_frame(
         identifier: String,
         payload: Buffer,
-    ) -> Result<URLLinkFrame, FrameError> {
+    ) -> Result<URLLinkFrame, HeaderError> {
         let data = common::get_text(&Encoding::UTF8, &payload[..])?;
         Ok(URLLinkFrame::new(identifier, data))
     }
 
     #[allow(non_snake_case)]
-    pub fn parse_TXXX(payload: Buffer) -> Result<TXXX, FrameError> {
+    pub fn parse_TXXX(payload: Buffer) -> Result<TXXX, HeaderError> {
         let mut encoding = common::get_encoding(payload[0])?;
         let mut cursor = 1;
         if let Encoding::UTF16_WITH_BOM = encoding {
@@ -307,7 +316,7 @@ mod worker {
     }
 
     #[allow(non_snake_case)]
-    pub fn parse_WXXX(payload: Buffer) -> Result<WXXX, FrameError> {
+    pub fn parse_WXXX(payload: Buffer) -> Result<WXXX, HeaderError> {
         let mut encoding = common::get_encoding(payload[0])?;
         let mut cursor = 1;
         if let Encoding::UTF16_WITH_BOM = encoding {
@@ -322,7 +331,7 @@ mod worker {
     }
 
     #[allow(non_snake_case)]
-    pub fn parse_USLT(payload: Buffer) -> Result<USLT, FrameError> {
+    pub fn parse_USLT(payload: Buffer) -> Result<USLT, HeaderError> {
         let frame_encoding = common::get_encoding(payload[0])?;
         let mut data_encoding = common::get_encoding(payload[0])?;
         let language: String = String::from_utf8(payload[1..=3].into()).expect("");
@@ -343,7 +352,7 @@ mod worker {
     }
 
     #[allow(non_snake_case)]
-    pub fn parse_SYLT(payload: Buffer) -> Result<SYLT, FrameError> {
+    pub fn parse_SYLT(payload: Buffer) -> Result<SYLT, HeaderError> {
         let frame_encoding = common::get_encoding(payload[0])?;
         let language: String = String::from_utf8(payload[1..=3].into()).expect("");
         let timestamp_format: u8 = payload[4];
@@ -364,7 +373,7 @@ mod worker {
     }
 
     #[allow(non_snake_case)]
-    pub fn parse_COMM(payload: Buffer) -> Result<COMM, FrameError> {
+    pub fn parse_COMM(payload: Buffer) -> Result<COMM, HeaderError> {
         let frame_encoding = common::get_encoding(payload[0])?;
         let mut data_encoding = common::get_encoding(payload[0])?;
         let language: String = String::from_utf8(payload[1..=3].into()).expect("");
@@ -385,7 +394,7 @@ mod worker {
     }
 
     #[allow(non_snake_case)]
-    pub fn parse_APIC(payload: Buffer) -> Result<APIC, FrameError> {
+    pub fn parse_APIC(payload: Buffer) -> Result<APIC, HeaderError> {
         let mut encoding = common::get_encoding(payload[0])?;
         let mut cursor: usize = 1;
         let (MIME_type, skip): (String, usize) =
@@ -411,7 +420,7 @@ mod worker {
     }
 
     #[allow(non_snake_case)]
-    pub fn parse_RarelyUsed(identifier: String, payload: Buffer) -> Result<RarelyUsed, FrameError> {
+    pub fn parse_RarelyUsed(identifier: String, payload: Buffer) -> Result<RarelyUsed, HeaderError> {
         Ok(RarelyUsed::new(identifier, payload))
     }
 }
@@ -420,9 +429,9 @@ mod common {
 
     use std::collections::VecDeque;
 
-    use crate::{error::frame_error::FrameError, frames::common::Encoding, util};
+    use crate::{error::header_error::HeaderError, frames::common::Encoding, util};
 
-    pub fn get_text(encoding: &Encoding, payload: &[u8]) -> Result<String, FrameError> {
+    pub fn get_text(encoding: &Encoding, payload: &[u8]) -> Result<String, HeaderError> {
         let text = match encoding {
             Encoding::ISO_8859_1 => util::latin1_to_string(payload),
             Encoding::UTF16_BE => {
@@ -447,14 +456,14 @@ mod common {
         Ok(text)
     }
 
-    pub fn get_encoding(payload: u8) -> Result<Encoding, FrameError> {
+    pub fn get_encoding(payload: u8) -> Result<Encoding, HeaderError> {
         let encoding = match payload {
             0x00 => Encoding::ISO_8859_1,
             0x01 => Encoding::UTF16_WITH_BOM,
             0x02 => Encoding::UTF16_BE,
             0x03 => Encoding::UTF8,
             _ => {
-                return Err(FrameError::UnknownError(
+                return Err(HeaderError::UnknownError(
                     "Out-of-bounds indexing".to_string(),
                 ))
             }
@@ -465,7 +474,7 @@ mod common {
     pub fn get_text_according_to_encoding(
         payload: &[u8],
         encoding: &Encoding,
-    ) -> Result<(String, usize), FrameError> {
+    ) -> Result<(String, usize), HeaderError> {
         let mut cursor: usize = 0;
         let mut text_vec: Vec<u8> = Vec::new();
         let mut text: String;
@@ -514,7 +523,7 @@ mod common {
                 }
                 Ok((text, cursor + 1))
             }
-            _ => Err(FrameError::UnknownError(
+            _ => Err(HeaderError::UnknownError(
                 "UTF16_WITH_BOM is not allowed".to_string(),
             )),
         }
