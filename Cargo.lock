@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "id3-parser"
+name = "music-metadata"
 version = "0.1.0"
