@@ -1,26 +1,29 @@
 // 如果frame有description不定长字段，如果frame中为空，则设置为String::from("null")
 
 mod error;
+mod extended_header;
 mod frames;
+mod id3v1_tag;
 mod protocol_header;
 mod reader;
 mod util;
 mod version;
 
 use error::header_error::HeaderError;
+use extended_header::ExtendedHeader;
 use frames::common::Tape;
 use frames::header::FrameHeader;
 use frames::identifiers::{
     IDFactory, RarelyUsedFrameIdentifier, TextInformationFrameIdentifier, URLLinkFrameIdentifier,
 };
-use protocol_header::ProtocolHeader;
+use id3v1_tag::ID3v1;
+use protocol_header::{Flag, ProtocolHeader};
 use reader::{Buffer, BufferReader};
-use version::Version;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
 use std::{fs, io};
-
+use version::Version;
 
 pub struct Parser<T>
 where
@@ -29,31 +32,48 @@ where
     fp: T,
     hm: HashMap<String, usize>,
     /// Some frames appear more than once
-    pub data: Vec<Vec<Box<dyn Tape>>>,
-    size: u64
+    frames: Vec<Vec<Box<dyn Tape>>>,
+    /// protocol header
+    pub pheader: ProtocolHeader,
+    /// extended header
+    pub eheader: ExtendedHeader,
+    /// sum of extended header (including payload), frames, padding
+    padding_size: u32,
+    /// ID3v1 tag
+    pub id3v1: ID3v1,
+    /// file size, for locating ID3v1
+    file_size: u64,
 }
 
 impl<T> Parser<T>
 where
     T: AsRef<Path>,
 {
-    /// create a new parser
+    /// Create a new parser.
     pub fn new(fp: T) -> io::Result<Self> {
-        let sz = File::open(&fp)?.metadata()?.len();
+        let file_size = File::open(&fp)?.metadata()?.len();
         Ok(Parser {
             fp,
             hm: HashMap::default(),
-            data: Vec::default(),
-            size: sz
+            frames: Vec::default(),
+            pheader: ProtocolHeader::default(),
+            eheader: ExtendedHeader::default(),
+            padding_size: u32::default(),
+            id3v1: ID3v1::default(),
+            file_size,
         })
     }
 
-    /// Return frame content that after decoding
-    /// All text information frames should call this method, including TXXX
+    /// Return frame content that after decoding.
+    /// 
+    /// All text information frames should call this method, including TXXX.
+    /// 
+    /// This method is case insensitive.
     pub fn get(&self, query: &str) -> Option<Vec<String>> {
-        if let Some(index) = self.hm.get(query) {
+        let upper_query = query.to_uppercase();
+        if let Some(index) = self.hm.get(&upper_query) {
             let mut rst = Vec::default();
-            for d in self.data[*index].iter() {
+            for d in self.frames[*index].iter() {
                 rst.push(d.message());
             }
             Some(rst)
@@ -62,34 +82,71 @@ where
         }
     }
 
-    /// Return raw data without decoding
-    /// APIC should call this method, as should SYLT
+    /// Return raw data without decoding.
+    /// 
+    /// APIC should call this method, as should SYLT,
     /// SYLT may call the `get` method in the future
+    /// 
+    /// This method is case insensitive.
     pub fn get_raw(&self, query: &str) -> Option<Vec<Vec<u8>>> {
-        if let Some(index) = self.hm.get(query) {
+        let upper_query = query.to_uppercase();
+        if let Some(index) = self.hm.get(&upper_query) {
             let mut rst = Vec::default();
-            for d in self.data[*index].iter() {
+            for d in self.frames[*index].iter() {
                 rst.push(d.raw());
             }
             Some(rst)
         } else {
             None
-        }        
+        }
     }
+
+    /// Push a frame to self.frames.
     fn push(&mut self, v: Box<dyn Tape>) -> io::Result<()> {
         if let Some(index) = self.hm.get(&v.identifier()) {
-            self.data[*index].push(v);
+            self.frames[*index].push(v);
         } else {
-            let index = self.data.len();
+            let index = self.frames.len();
             self.hm.insert(v.identifier(), index);
-            self.data.push(Vec::default());
-            self.data[index].push(v);
+            self.frames.push(Vec::default());
+            self.frames[index].push(v);
         }
         Ok(())
     }
 
-    /// start parse id3
-    pub fn parse_id3(&mut self) -> io::Result<()> {
+
+    /// Start parse id3v1.
+    /// 
+    /// It is not recommended to call this method,
+    /// 
+    /// thinking that the ID3 protocol contains very little information,
+    /// 
+    /// unless a very old song.
+    pub fn parse_id3v1(&mut self) -> io::Result<()> {
+        let position = self.file_size - 128;
+        let mut buffer_reader = BufferReader::new(&self.fp)?;
+        buffer_reader.seek(position)?;
+        let buffer = buffer_reader.read_id3v1_buffer()?;
+        let mut start: usize = 0;
+        let header: Vec<u8> = (buffer[start..start + 3]).to_vec();
+        start += 3;
+        let title: Vec<u8> = (buffer[start..start + 30]).to_vec();
+        start += 30;
+        let artist: Vec<u8> = (buffer[start..start + 30]).to_vec();
+        start += 30;
+        let album: Vec<u8> = (buffer[start..start + 30]).to_vec();
+        start += 30;
+        let year: Vec<u8> = (buffer[start..start + 4]).to_vec();
+        start += 4;
+        let comment: Vec<u8> = (buffer[start..start + 30]).to_vec();
+        start += 30;
+        let genre: u8 = buffer[start];
+        self.id3v1 = ID3v1::new(header, title, artist, album, year, comment, genre);
+        Ok(())
+    }
+
+    /// Start parse id3v2.
+    pub fn parse_id3v2(&mut self) -> io::Result<()> {
         let mut buffer_reader = BufferReader::new(&self.fp)?;
 
         let mut buffer: Buffer;
@@ -100,11 +157,19 @@ where
             println!("not include ID3v2.3 or ID3v2.4");
             return Ok(());
         }
-        let protocol_header = rst.unwrap();
+        self.pheader = rst.unwrap();
         let mut start: u32 = 0;
-        while start < protocol_header.size {
+        if self.pheader.flags.ExtendedHeader {
+            buffer = buffer_reader.read_extended_header()?;
+            let mut ext = parse_extended_header(&buffer, &self.pheader.major_version);
+            ext.payload = buffer_reader.skip(ext.len.into())?;
+            self.eheader = ext;
+            start += 10 + self.eheader.len as u32;
+        }
+
+        while start < self.pheader.size {
             buffer = buffer_reader.read_frame_header_buffer()?;
-            match parse_frame_header(&buffer, &protocol_header.major_version) {
+            match parse_frame_header(&buffer, &self.pheader.major_version) {
                 Ok(v) => {
                     buffer = buffer_reader.read_frame_payload_buffer(v.size)?;
                     match parse_frame_payload(&buffer, &v) {
@@ -117,6 +182,7 @@ where
                 }
                 Err(e) => match e {
                     HeaderError::IsPadding => {
+                        self.padding_size = self.pheader.size - start;
                         println!("### Endding ###");
                         return Ok(());
                     }
@@ -141,19 +207,23 @@ raw: {:?}",
         Ok(())
     }
 
-
-    /// As the method says
+    /// As the method says.
+    /// 
+    /// In addition, its own data will be cleared.
     pub fn change_target(&mut self, new_fp: T) {
         self.fp = new_fp;
+        self.hm.clear();
+        self.frames.clear()
     }
 
     /// Write APIC frame's raw to the current directory named with filename.jpg like 云烟成雨.jpg if there is only one APIC frame.
-    /// Unless, add a underline followd by a number after the filename start with the second one, like 云烟成雨_1.jpg
+    /// 
+    /// Unless, add a underline followd by a number after the filename start with the second one, like 云烟成雨_1.jpg.
     pub fn write_image(&self) -> io::Result<()> {
         let mut t = self.fp.as_ref().to_owned();
         t.set_extension("");
         if let Some(index) = self.hm.get("APIC") {
-            for (index, d) in self.data[*index].iter().enumerate() {
+            for (index, d) in self.frames[*index].iter().enumerate() {
                 let fname = t.as_mut_os_string();
                 if index > 0 {
                     fname.push("_");
@@ -182,11 +252,18 @@ fn parse_protocol_header(header: &Buffer) -> Result<ProtocolHeader, HeaderError>
         },
         revision: header[4],
         size: util::get_size(header[6..].to_vec(), &Version::V4),
-        flags: util::map_to_binary(&[header[5]])[0].clone(),
+        flags: Flag::new(header[5]),
     };
     Ok(header)
 }
 
+fn parse_extended_header(header: &Buffer, version: &Version) -> ExtendedHeader {
+    ExtendedHeader::new(
+        version.clone(),
+        util::get_size(header[0..=3].to_vec(), version) as u8,
+        header[4..].into(),
+    )
+}
 fn parse_frame_header(header: &Buffer, version: &Version) -> Result<FrameHeader, HeaderError> {
     let frame_header = FrameHeader {
         identifier: IDFactory::from(header[0..=3].to_vec()),
@@ -420,7 +497,10 @@ mod worker {
     }
 
     #[allow(non_snake_case)]
-    pub fn parse_RarelyUsed(identifier: String, payload: Buffer) -> Result<RarelyUsed, HeaderError> {
+    pub fn parse_RarelyUsed(
+        identifier: String,
+        payload: Buffer,
+    ) -> Result<RarelyUsed, HeaderError> {
         Ok(RarelyUsed::new(identifier, payload))
     }
 }

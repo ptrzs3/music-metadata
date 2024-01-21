@@ -10,7 +10,7 @@ Music Metadata Parser for Developer
 
 ✔️ID3v2.4
 
-❌ID3v1 (Soon)
+✔️ID3v1(.1)
 
 Developing other music formats such as flac, ogg, etc.
 

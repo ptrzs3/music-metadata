@@ -28,6 +28,7 @@ pub fn get_size(size: Vec<u8>, v: &Version) -> u32 {
                 + (size[2] as u32 & 0x7F) * 0x80
                 + (size[3] as u32 & 0x7F)
         }
+        Version::Default => 0
     }
 }
 
