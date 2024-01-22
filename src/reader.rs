@@ -26,7 +26,7 @@ impl BufferReader {
         self.read_protocol_header_buffer()
     }
 
-    pub fn read_extended_header(&mut self) -> io::Result<Buffer> {
+    pub fn read_extended_header_buffer(&mut self) -> io::Result<Buffer> {
         self.read_protocol_header_buffer()
     }
 
@@ -40,6 +40,10 @@ impl BufferReader {
         self.read_frame_payload_buffer(128)
     }
 
+    pub fn read_footer_buffer(&mut self) -> io::Result<Buffer> {
+        self.read_protocol_header_buffer()
+    }
+
     pub fn skip(&mut self, length: u32) -> io::Result<Buffer> {
         // self.file.seek(io::SeekFrom::Current(length as i64))?;
         self.read_frame_payload_buffer(length)
@@ -48,5 +52,5 @@ impl BufferReader {
     /// absolute position from file start
     pub fn seek(&mut self, location: u64) -> io::Result<u64>{
         self.file.seek(io::SeekFrom::Start(location))
-    } 
+    }
 }

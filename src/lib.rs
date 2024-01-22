@@ -8,9 +8,11 @@ mod protocol_header;
 mod reader;
 mod util;
 mod version;
+mod footer;
 
 use error::header_error::HeaderError;
 use extended_header::ExtendedHeader;
+use footer::Footer;
 use frames::common::Tape;
 use frames::header::FrameHeader;
 use frames::identifiers::{
@@ -38,7 +40,9 @@ where
     /// extended header
     pub eheader: ExtendedHeader,
     /// sum of extended header (including payload), frames, padding
-    padding_size: u32,
+    pub padding_size: u32,
+
+    pub footer: Footer,
     /// ID3v1 tag
     pub id3v1: ID3v1,
     /// file size, for locating ID3v1
@@ -59,6 +63,7 @@ where
             pheader: ProtocolHeader::default(),
             eheader: ExtendedHeader::default(),
             padding_size: u32::default(),
+            footer: Footer::default(),
             id3v1: ID3v1::default(),
             file_size,
         })
@@ -160,7 +165,7 @@ where
         self.pheader = rst.unwrap();
         let mut start: u32 = 0;
         if self.pheader.flags.ExtendedHeader {
-            buffer = buffer_reader.read_extended_header()?;
+            buffer = buffer_reader.read_extended_header_buffer()?;
             let mut ext = parse_extended_header(&buffer, &self.pheader.major_version);
             ext.payload = buffer_reader.skip(ext.len.into())?;
             self.eheader = ext;
@@ -183,7 +188,12 @@ where
                 Err(e) => match e {
                     HeaderError::IsPadding => {
                         self.padding_size = self.pheader.size - start;
-                        println!("### Endding ###");
+                        if self.pheader.flags.Footer {
+                            // 将reader的指针定位到footer第一个字节
+                            buffer_reader.seek(10 + self.pheader.size as u64)?;
+                            buffer = buffer_reader.read_footer_buffer()?;
+                            self.footer = parse_footer_buffer(&buffer).unwrap();
+                        }
                         return Ok(());
                     }
                     HeaderError::Unimplement(id, skip) => {
@@ -239,22 +249,26 @@ raw: {:?}",
     }
 }
 fn parse_protocol_header(header: &Buffer) -> Result<ProtocolHeader, HeaderError> {
-    let header = ProtocolHeader {
-        identifier: String::from_utf8_lossy(&header[..3]).into_owned(),
+    let protocol_header = ProtocolHeader {
+        identifier: String::from_utf8_lossy(&header[..=2]).into_owned(),
         major_version: {
-            if header[0..=3] == [0x49, 0x44, 0x33, 0x03] {
+            if header[0..=3] == [0x49, 0x44, 0x33, 0x03] || header[0..=3] == [0x33, 0x44, 0x49, 0x03]{
                 Version::V3
-            } else if header[0..=3] == [0x49, 0x44, 0x33, 0x04] {
+            } else if header[0..=3] == [0x49, 0x44, 0x33, 0x04] || header[0..=3] == [0x33, 0x44, 0x49, 0x04]{
                 Version::V4
             } else {
                 return Err(HeaderError::Unimplement("Wrong Header".to_string(), 1));
             }
         },
         revision: header[4],
-        size: util::get_size(header[6..].to_vec(), &Version::V4),
         flags: Flag::new(header[5]),
+        size: util::get_size(header[6..].to_vec(), &Version::V4),
     };
-    Ok(header)
+    Ok(protocol_header)
+}
+
+fn parse_footer_buffer(footer: &Buffer) -> Result<Footer, HeaderError> {
+    Ok(Footer::from(parse_protocol_header(footer)?))
 }
 
 fn parse_extended_header(header: &Buffer, version: &Version) -> ExtendedHeader {

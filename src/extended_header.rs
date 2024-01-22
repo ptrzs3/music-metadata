@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::version::Version;
 
 #[derive(Debug)]
@@ -26,5 +28,17 @@ impl Default for ExtendedHeader {
             data: Vec::default(),
             payload: Vec::default(),
         }
+    }
+}
+
+impl Display for ExtendedHeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "
+ExtendedHeader {{
+    ver: {},
+    len: {},
+    data: {:X?},
+    payload: {:X?}
+}}", self.ver, self.len, self.data, self.payload)
     }
 }

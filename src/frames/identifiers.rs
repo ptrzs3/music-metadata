@@ -15,7 +15,7 @@ pub enum IDFactory {
 
 impl From<Vec<u8>> for IDFactory {
     fn from(value: Vec<u8>) -> Self {
-        if value == [0, 0, 0, 0] {
+        if value[0] == 0 {
             return IDFactory::PADDING;
         }
         let id: String = String::from_utf8(value).expect("");

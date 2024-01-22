@@ -19,7 +19,7 @@ impl Display for ProtocolHeader {
     identifier: {},
     major_version: {},
     revision, {},
-    flags: {:?},
+    flags: {{{}    }},
     size: {} Bytes
 }}",
             self.identifier, self.major_version, self.revision, self.flags, self.size
@@ -46,7 +46,7 @@ pub struct Flag {
     Unsynchronisation: bool,
     pub ExtendedHeader: bool,
     Experimental: bool,
-    Footer: bool
+    pub Footer: bool
 }
 
 impl Flag {
@@ -67,5 +67,16 @@ impl Flag {
 impl Default for Flag {
     fn default() -> Self {
         Flag { Unsynchronisation: false, ExtendedHeader: false, Experimental: false, Footer: false }
+    }
+}
+
+impl Display for Flag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "
+        Unsynchronisation: {},
+        ExtendedHeader: {},
+        Experimental: {},
+        Footer: {}
+", self.Unsynchronisation, self.ExtendedHeader, self.Experimental, self.Footer)
     }
 }

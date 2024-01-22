@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct ID3v1 {
@@ -43,5 +45,20 @@ impl Default for ID3v1 {
             comment: Vec::default(),
             genre: u8::default(),
         }
+    }
+}
+
+impl Display for ID3v1 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "
+ID3v1 {{
+    header: {:X?},
+    title: {:X?},
+    artist: {:X?},
+    album: {:X?},
+    year: {:X?},
+    comment: {:X?},
+    genre: {}
+}}", self.header, self.title, self.artist, self.album, self.year, self.comment, self.genre)
     }
 }
