@@ -19,9 +19,9 @@ impl From<Vec<u8>> for IDFactory {
             return IDFactory::PADDING;
         }
         let id: String = String::from_utf8(value).expect("");
-        if id.starts_with("T") {
-            return IDFactory::T(TextInformationFrameIdentifier::from(id));
-        } else if id.starts_with("W") {
+        if id.starts_with('T') {
+            IDFactory::T(TextInformationFrameIdentifier::from(id))
+        } else if id.starts_with('W') {
             return IDFactory::W(URLLinkFrameIdentifier::from(id));
         } else if id == "APIC" {
             return IDFactory::APIC;

@@ -17,13 +17,13 @@ pub fn map_to_binary(decimal: &[u8]) -> Vec<Byte> {
 pub fn get_size(size: Vec<u8>, v: &Version) -> u32 {
     match v {
         Version::V3 => {
-            return size[0] as u32 * 0x1000000
+            size[0] as u32 * 0x1000000
                 + size[1] as u32 * 0x10000
                 + size[2] as u32 * 0x100
-                + size[3] as u32;
+                + size[3] as u32
         }
         Version::V4 => {
-            return (size[0] as u32 & 0x7F) * 0x200000
+            (size[0] as u32 & 0x7F) * 0x200000
                 + (size[1] as u32 & 0x7F) * 0x4000
                 + (size[2] as u32 & 0x7F) * 0x80
                 + (size[3] as u32 & 0x7F)

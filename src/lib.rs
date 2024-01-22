@@ -1,5 +1,5 @@
 // 如果frame有description不定长字段，如果frame中为空，则设置为String::from("null")
-
+#[allow(clippy::disallowed_names)]
 mod error;
 mod extended_header;
 mod frames;
@@ -22,12 +22,14 @@ use id3v1_tag::ID3v1;
 use protocol_header::{Flag, ProtocolHeader};
 use reader::{Buffer, BufferReader};
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::fs::File;
 use std::path::Path;
 use std::{fs, io};
 use version::Version;
 
-pub struct Parser<T>
+#[allow(non_camel_case_types)]
+pub struct ID3_Parser<T>
 where
     T: AsRef<Path>,
 {
@@ -49,14 +51,14 @@ where
     file_size: u64,
 }
 
-impl<T> Parser<T>
+impl<T> ID3_Parser<T>
 where
     T: AsRef<Path>,
 {
     /// Create a new parser.
     pub fn new(fp: T) -> io::Result<Self> {
         let file_size = File::open(&fp)?.metadata()?.len();
-        Ok(Parser {
+        Ok(ID3_Parser {
             fp,
             hm: HashMap::default(),
             frames: Vec::default(),
@@ -89,8 +91,9 @@ where
 
     /// Return raw data without decoding.
     /// 
-    /// APIC should call this method, as should SYLT,
-    /// SYLT may call the `get` method in the future
+    /// APIC should call this method, as should SYLT.
+    /// 
+    /// SYLT may call the `get` method in the future.
     /// 
     /// This method is case insensitive.
     pub fn get_raw(&self, query: &str) -> Option<Vec<Vec<u8>>> {
@@ -158,7 +161,7 @@ where
 
         buffer = buffer_reader.read_protocol_header_buffer()?;
         let rst = parse_protocol_header(&buffer);
-        if let Err(_) = rst {
+        if rst.is_err() {
             println!("not include ID3v2.3 or ID3v2.4");
             return Ok(());
         }
@@ -234,7 +237,7 @@ raw: {:?}",
         t.set_extension("");
         if let Some(index) = self.hm.get("APIC") {
             for (index, d) in self.frames[*index].iter().enumerate() {
-                let fname = t.as_mut_os_string();
+                let mut fname: OsString = OsString::from(&t);
                 if index > 0 {
                     fname.push("_");
                     fname.push(index.to_string());
@@ -302,45 +305,45 @@ fn parse_frame_payload(
         IDFactory::T(id) => {
             if let TextInformationFrameIdentifier::TXXX = id {
                 let txxx = worker::parse_TXXX(payload.clone())?;
-                return Ok(Box::new(txxx));
+                Ok(Box::new(txxx))
             } else {
                 let text_infomation_frame = worker::parse_text_infomation_frame(
                     header.identifier.to_string(),
                     payload.clone(),
                 )?;
-                return Ok(Box::new(text_infomation_frame));
+                Ok(Box::new(text_infomation_frame))
             }
         }
         IDFactory::W(id) => {
             if let URLLinkFrameIdentifier::WXXX = id {
                 let wxxx = worker::parse_WXXX(payload.clone())?;
-                return Ok(Box::new(wxxx));
+                Ok(Box::new(wxxx))
             } else {
                 let url_link_frame =
                     worker::parse_url_link_frame(header.identifier.to_string(), payload.clone())?;
-                return Ok(Box::new(url_link_frame));
+                Ok(Box::new(url_link_frame))
             }
         }
         IDFactory::APIC => {
             let apic = worker::parse_APIC(payload.clone())?;
-            return Ok(Box::new(apic));
+            Ok(Box::new(apic))
         }
         IDFactory::COMM => {
             let comm = worker::parse_COMM(payload.clone())?;
-            return Ok(Box::new(comm));
+            Ok(Box::new(comm))
         }
         IDFactory::USLT => {
             let uslt = worker::parse_USLT(payload.clone())?;
-            return Ok(Box::new(uslt));
+            Ok(Box::new(uslt))
         }
         IDFactory::SYLT => {
             let sylt = worker::parse_SYLT(payload.clone())?;
-            return Ok(Box::new(sylt));
+            Ok(Box::new(sylt))
         }
         IDFactory::R(_) => {
             let rarely_used =
                 worker::parse_RarelyUsed(header.identifier.to_string(), payload.clone())?;
-            return Ok(Box::new(rarely_used));
+            Ok(Box::new(rarely_used))
         }
         _ => {
             panic!("Unexpected Error")
@@ -439,7 +442,7 @@ mod worker {
             cursor += 2;
         }
         let data = common::get_text(&data_encoding, &payload[cursor..])?;
-        Ok(USLT::new(data_encoding, language, description, data.into()))
+        Ok(USLT::new(data_encoding, language, description, data))
     }
 
     #[allow(non_snake_case)]
@@ -579,7 +582,7 @@ mod common {
                     cursor += 1;
                 }
                 text = util::latin1_to_string(&text_vec);
-                if text.len() == 0 {
+                if text.is_empty() {
                     text = "null".to_string();
                 }
                 Ok((text, cursor + 1))
@@ -590,7 +593,7 @@ mod common {
                     cursor += 1;
                 }
                 text = String::from_utf16(&util::into_big_endian_u16(&text_vec, true)?).expect("");
-                if text.len() == 0 {
+                if text.is_empty() {
                     text = "null".to_string();
                 }
                 Ok((text, cursor + 2))
@@ -601,7 +604,7 @@ mod common {
                     cursor += 1;
                 }
                 text = String::from_utf16(&util::into_big_endian_u16(&text_vec, false)?).expect("");
-                if text.len() == 0 {
+                if text.is_empty() {
                     text = "null".to_string();
                 }
                 Ok((text, cursor + 2))
@@ -612,7 +615,7 @@ mod common {
                     cursor += 1;
                 }
                 text = String::from_utf8(text_vec).expect("");
-                if text.len() == 0 {
+                if text.is_empty() {
                     text = "null".to_string();
                 }
                 Ok((text, cursor + 1))
@@ -625,9 +628,9 @@ mod common {
 
     pub fn refine_encoding(payload: &[u8]) -> Encoding {
         if payload[0] == 0xFF && payload[1] == 0xFE {
-            return Encoding::UTF16_LE;
+            Encoding::UTF16_LE
         } else {
-            return Encoding::UTF16_BE;
+            Encoding::UTF16_BE
         }
     }
 }

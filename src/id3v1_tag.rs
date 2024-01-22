@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 #[derive(Debug)]
 #[allow(dead_code)]
+#[derive(Default)]
 pub struct ID3v1 {
     header: Vec<u8>,
     title: Vec<u8>,
@@ -34,19 +35,7 @@ impl ID3v1 {
     }
 }
 
-impl Default for ID3v1 {
-    fn default() -> Self {
-        Self {
-            header: Vec::default(),
-            title: Vec::default(),
-            artist: Vec::default(),
-            album: Vec::default(),
-            year: Vec::default(),
-            comment: Vec::default(),
-            genre: u8::default(),
-        }
-    }
-}
+
 
 impl Display for ID3v1 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

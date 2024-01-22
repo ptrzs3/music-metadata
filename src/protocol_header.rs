@@ -3,6 +3,7 @@ use std::fmt::Display;
 use crate::version::Version;
 
 #[derive(Debug)]
+#[derive(Default)]
 pub struct ProtocolHeader {
     pub identifier: String,
     pub major_version: Version,
@@ -27,21 +28,12 @@ impl Display for ProtocolHeader {
     }
 }
 
-impl Default for ProtocolHeader {
-    fn default() -> Self {
-        ProtocolHeader {
-            identifier: String::default(),
-            major_version: Version::default(),
-            revision: u8::default(),
-            flags: Flag::default(),
-            size: u32::default()
-        }
-    }
-}
+
 
 #[derive(Debug)]
 #[allow(non_snake_case)]
 #[allow(dead_code)]
+#[derive(Default)]
 pub struct Flag {
     Unsynchronisation: bool,
     pub ExtendedHeader: bool,
@@ -49,6 +41,7 @@ pub struct Flag {
     pub Footer: bool
 }
 
+#[allow(clippy::disallowed_names)]
 impl Flag {
     pub fn new(flag: u8) -> Flag {
         let uns = (flag & 128) >> 7 == 1;
@@ -64,11 +57,7 @@ impl Flag {
     }
 }
 
-impl Default for Flag {
-    fn default() -> Self {
-        Flag { Unsynchronisation: false, ExtendedHeader: false, Experimental: false, Footer: false }
-    }
-}
+
 
 impl Display for Flag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

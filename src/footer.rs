@@ -6,6 +6,7 @@ use crate::{
 };
 
 #[derive(Debug)]
+#[derive(Default)]
 pub struct Footer {
     pub identifier: String,
     pub major_version: Version,
@@ -44,17 +45,7 @@ impl From<ProtocolHeader> for Footer {
     }
 }
 
-impl Default for Footer {
-    fn default() -> Self {
-        Footer {
-            identifier: String::default(),
-            major_version: Version::default(),
-            revision: u8::default(),
-            flags: Flag::default(),
-            size: u32::default(),
-        }
-    }
-}
+
 
 impl Display for Footer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

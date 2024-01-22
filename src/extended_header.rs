@@ -3,6 +3,7 @@ use std::fmt::Display;
 use crate::version::Version;
 
 #[derive(Debug)]
+#[derive(Default)]
 pub struct ExtendedHeader {
     pub ver: Version,
     pub len: u8,
@@ -20,16 +21,7 @@ impl ExtendedHeader {
     }
 }
 
-impl Default for ExtendedHeader {
-    fn default() -> Self {
-        ExtendedHeader {
-            ver: Version::default(),
-            len: u8::default(),
-            data: Vec::default(),
-            payload: Vec::default(),
-        }
-    }
-}
+
 
 impl Display for ExtendedHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

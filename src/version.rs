@@ -1,9 +1,11 @@
 use std::fmt::Display;
 
 #[derive(Debug)]
+#[derive(Default)]
 pub enum Version {
     V3,
     V4,
+    #[default]
     Default
 }
 impl Display for Version {
@@ -26,8 +28,3 @@ impl Clone for Version {
     }
 }
 
-impl Default for Version {
-    fn default() -> Self {
-        Version::Default
-    }
-}
