@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::version::Version;
+use super::version::Version;
 
 #[derive(Debug)]
 #[derive(Default)]

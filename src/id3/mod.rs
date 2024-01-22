@@ -1,0 +1,9 @@
+pub mod error;
+pub mod protocol_header;
+pub mod extended_header;
+pub mod frames;
+pub mod footer;
+pub mod version;
+pub mod id3v1_tag;
+pub mod core;
+pub mod common;

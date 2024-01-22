@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{
+use super::{
     protocol_header::{Flag, ProtocolHeader},
     version::Version,
 };
