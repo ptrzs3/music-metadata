@@ -2,6 +2,7 @@
 mod id3;
 mod reader;
 mod util;
+mod flac;
 
 use std::collections::HashMap;
 use std::ffi::OsString;
