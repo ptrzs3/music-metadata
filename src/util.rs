@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 
 use crate::id3::{error::header_error::HeaderError, frames::header::Byte};
+pub type Buffer = Vec<u8>;
 
 pub fn map_to_binary(decimal: &[u8]) -> Vec<Byte> {
     let mut result: Vec<Byte> = Vec::new();

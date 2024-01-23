@@ -1,6 +1,6 @@
-use music_metadata::ID3_Parser;
+use music_metadata::ID3Parser;
 fn main() -> std::io::Result<()> {
-    let mut parser = ID3_Parser::new("云烟成雨.mp3").unwrap();
+    let mut parser = ID3Parser::new("云烟成雨.mp3").unwrap();
     
     parser.parse_id3v1()?;
     // The ID3v1 protocol does not specify the content encoding, 

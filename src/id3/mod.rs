@@ -7,3 +7,4 @@ pub mod version;
 pub mod id3v1_tag;
 pub mod core;
 pub mod common;
+pub mod id3_buffer_reader;

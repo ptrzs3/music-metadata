@@ -1,11 +1,7 @@
-use crate::{reader::Buffer, util};
+use crate::util::{self, Buffer};
 
 use super::{
-    common,
-    error::header_error::HeaderError,
-    extended_header::ExtendedHeader,
-    footer::Footer,
-    frames::{
+    common, error::header_error::HeaderError, extended_header::ExtendedHeader, footer::Footer, frames::{
         common::{Encoding, Tape},
         header::FrameHeader,
         identifiers::{
@@ -21,9 +17,7 @@ use super::{
         TXXX::TXXX,
         USLT::USLT,
         WXXX::WXXX,
-    },
-    protocol_header::{Flag, ProtocolHeader},
-    version::Version,
+    }, protocol_header::{Flag, ProtocolHeader}, version::Version
 };
 
 pub fn parse_protocol_header(header: &Buffer) -> Result<ProtocolHeader, HeaderError> {

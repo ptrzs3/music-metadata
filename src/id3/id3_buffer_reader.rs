@@ -4,14 +4,15 @@ use std::{
     path::Path,
 };
 
-pub type Buffer = Vec<u8>;
-pub struct BufferReader {
+use crate::util::Buffer;
+
+pub struct ID3BufferReader {
     file: File,
 }
 
-impl BufferReader {
+impl ID3BufferReader {
     pub fn new<T: AsRef<Path>>(f: T) -> io::Result<Self> {
-        Ok(BufferReader {
+        Ok(ID3BufferReader {
             file: File::open(f)?,
         })
     }

@@ -1,8 +1,7 @@
 // 如果frame有description不定长字段，如果frame中为空，则设置为String::from("null")
-mod id3;
-mod reader;
-mod util;
 mod flac;
+mod id3;
+mod util;
 
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -10,17 +9,22 @@ use std::fs::File;
 use std::path::Path;
 use std::{fs, io};
 
-use id3::core::{parse_extended_header, parse_footer_buffer, parse_frame_header, parse_frame_payload, parse_protocol_header};
+use flac::error::FlacError;
+use flac::flac_buffer_reader::FlacBufferReader;
+use id3::core::{
+    parse_extended_header, parse_footer_buffer, parse_frame_header, parse_frame_payload,
+    parse_protocol_header,
+};
 use id3::error::header_error::HeaderError;
 use id3::extended_header::ExtendedHeader;
 use id3::footer::Footer;
 use id3::frames::common::Tape;
+use id3::id3_buffer_reader::ID3BufferReader;
 use id3::id3v1_tag::ID3v1;
 use id3::protocol_header::ProtocolHeader;
-use reader::{Buffer, BufferReader};
+use util::Buffer;
 
-#[allow(non_camel_case_types)]
-pub struct ID3_Parser<T>
+pub struct ID3Parser<T>
 where
     T: AsRef<Path>,
 {
@@ -42,14 +46,14 @@ where
     file_size: u64,
 }
 
-impl<T> ID3_Parser<T>
+impl<T> ID3Parser<T>
 where
     T: AsRef<Path>,
 {
     /// Create a new parser.
     pub fn new(fp: T) -> io::Result<Self> {
         let file_size = File::open(&fp)?.metadata()?.len();
-        Ok(ID3_Parser {
+        Ok(ID3Parser {
             fp,
             hm: HashMap::default(),
             frames: Vec::default(),
@@ -63,9 +67,9 @@ where
     }
 
     /// Return frame content that after decoding.
-    /// 
+    ///
     /// All text information frames should call this method, including TXXX.
-    /// 
+    ///
     /// This method is case insensitive.
     pub fn get(&self, query: &str) -> Option<Vec<String>> {
         let upper_query = query.to_uppercase();
@@ -81,11 +85,11 @@ where
     }
 
     /// Return raw data without decoding.
-    /// 
+    ///
     /// APIC should call this method, as should SYLT.
-    /// 
+    ///
     /// SYLT may call the `get` method in the future.
-    /// 
+    ///
     /// This method is case insensitive.
     pub fn get_raw(&self, query: &str) -> Option<Vec<Vec<u8>>> {
         let upper_query = query.to_uppercase();
@@ -113,17 +117,16 @@ where
         Ok(())
     }
 
-
     /// Start parse id3v1.
-    /// 
+    ///
     /// It is not recommended to call this method,
-    /// 
+    ///
     /// thinking that the ID3 protocol contains very little information,
-    /// 
+    ///
     /// unless a very old song.
     pub fn parse_id3v1(&mut self) -> io::Result<()> {
         let position = self.file_size - 128;
-        let mut buffer_reader = BufferReader::new(&self.fp)?;
+        let mut buffer_reader = ID3BufferReader::new(&self.fp)?;
         buffer_reader.seek(position)?;
         let buffer = buffer_reader.read_id3v1_buffer()?;
         let mut start: usize = 0;
@@ -146,7 +149,7 @@ where
 
     /// Start parse id3v2.
     pub fn parse_id3v2(&mut self) -> io::Result<()> {
-        let mut buffer_reader = BufferReader::new(&self.fp)?;
+        let mut buffer_reader = ID3BufferReader::new(&self.fp)?;
 
         let mut buffer: Buffer;
 
@@ -212,7 +215,7 @@ raw: {:?}",
     }
 
     /// As the method says.
-    /// 
+    ///
     /// In addition, its own data will be cleared.
     pub fn change_target(&mut self, new_fp: T) {
         self.fp = new_fp;
@@ -221,7 +224,7 @@ raw: {:?}",
     }
 
     /// Write APIC frame's raw to the current directory named with filename.jpg like 云烟成雨.jpg if there is only one APIC frame.
-    /// 
+    ///
     /// Unless, add a underline followd by a number after the filename start with the second one, like 云烟成雨_1.jpg.
     pub fn write_image(&self) -> io::Result<()> {
         let mut t = self.fp.as_ref().to_owned();
@@ -240,5 +243,41 @@ raw: {:?}",
             println!("NO APIC");
         }
         Ok(())
+    }
+}
+
+pub struct FlacParser<T>
+where
+    T: AsRef<Path>,
+{
+    fp: T,
+}
+
+#[allow(dead_code)]
+#[allow(unused_assignments)]
+#[allow(unused_variables)]
+impl<T> FlacParser<T>
+where
+    T: AsRef<Path>,
+{
+    pub fn new(fp: T) -> io::Result<Self> {
+        Ok(FlacParser { fp })
+    }
+    fn parse(&mut self) -> io::Result<()> {
+        let mut buffer_reader = FlacBufferReader::new(&self.fp)?;
+        let buffer: Buffer;
+        buffer = buffer_reader.read_flac_header()?;
+        if let Err(_) = self.parse_flac_header(&buffer) {
+            println!("not include flac header");
+            return  Ok(());
+        }
+        Ok(())
+    }
+
+    fn parse_flac_header(&mut self, buffer: &Vec<u8>) -> Result<(), FlacError> {
+        if buffer[..] == [0x66, 0x4C, 0x61, 0x43] {
+            return Ok(());
+        }
+        Err(FlacError::WrongHeader)
     }
 }
