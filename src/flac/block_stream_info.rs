@@ -1,5 +1,5 @@
 #[derive(Debug)]
-pub struct StreamInfo {
+pub struct BlockStreamInfo {
     min_block_size: u16,
     max_block_size: u16,
     min_frame_size: u32,
@@ -11,7 +11,7 @@ pub struct StreamInfo {
     md5: u128,
 }
 
-impl StreamInfo {
+impl BlockStreamInfo {
     pub fn new(
         min_block_size: u16,
         max_block_size: u16,
@@ -33,6 +33,21 @@ impl StreamInfo {
             bits_per_sample,
             total_samples,
             md5,
+        }
+    }
+}
+impl Default for BlockStreamInfo {
+    fn default() -> Self {
+        BlockStreamInfo {
+            min_block_size: u16::default(),
+            max_block_size: u16::default(),
+            min_frame_size: u32::default(),
+            max_frame_size: u32::default(),
+            sample_rate: u32::default(),
+            channels: u8::default(),
+            bits_per_sample: u8::default(),
+            total_samples: u64::default(),
+            md5: u128::default(),
         }
     }
 }

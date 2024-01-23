@@ -12,7 +12,7 @@ impl FlacBufferReader {
             file: File::open(f)?,
         })
     }
-    pub fn read_flac_header(&mut self) -> io::Result<Buffer> {
+    pub fn read_block_header(&mut self) -> io::Result<Buffer> {
         let mut buf = vec![0; 4];
         self.file.read_exact(&mut buf)?;
         Ok(buf)

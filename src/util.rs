@@ -54,3 +54,25 @@ pub fn latin1_to_string(latin1: &[u8]) -> String {
     }
     vq.iter().map(|&c| c as char).collect()
 }
+pub fn parse_4_bytes_with_little_endian(buffer: &[u8]) -> u32 {
+    buffer[0] as u32
+        + buffer[1] as u32 * 0x100
+        + buffer[2] as u32 * 0x10000
+        + buffer[3] as u32 * 0x1000000
+}
+pub fn parse_4_bytes_with_big_endian(buffer: &[u8]) -> u32 {
+    buffer[3] as u32
+        + buffer[2] as u32 * 0x100
+        + buffer[1] as u32 * 0x10000
+        + buffer[0] as u32 * 0x1000000
+}
+pub fn parse_8_bytes_with_big_endian(buffer: &[u8]) -> u64 {
+    buffer[7] as u64
+        + buffer[6] as u64 * 0x100
+        + buffer[5] as u64 * 0x10000
+        + buffer[4] as u64 * 0x1000000
+        + buffer[3] as u64 * 0x100000000
+        + buffer[2] as u64 * 0x10000000000
+        + buffer[1] as u64 * 0x1000000000000
+        + buffer[0] as u64 * 0x100000000000000
+}
