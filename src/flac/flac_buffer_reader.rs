@@ -17,4 +17,9 @@ impl FlacBufferReader {
         self.file.read_exact(&mut buf)?;
         Ok(buf)
     }
+    pub fn read_block_data_buffer(&mut self, length: u32) -> io::Result<Buffer> {
+        let mut buf = vec![0; length as usize];
+        self.file.read_exact(&mut buf)?;
+        Ok(buf)
+    }
 }

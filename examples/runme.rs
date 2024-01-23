@@ -1,7 +1,7 @@
 use music_metadata::ID3Parser;
 fn main() -> std::io::Result<()> {
     // https://drive.google.com/file/d/1fp_TYclIKZAWMwFTnxEEe4PqJCuBqHl4/view?usp=sharing
-    let mut parser = ID3Parser::new("云烟成雨.mp3").unwrap();
+    let mut parser = ID3Parser::new(r"C:\Users\ptrzs\Desktop\q\云烟成雨.mp3").unwrap();
     
     parser.parse_id3v1()?;
     // The ID3v1 protocol does not specify the content encoding, 
