@@ -27,9 +27,10 @@ cargo run --example runme
 ## Example
 
 ```rust
-use music_metadata::ID3_Parser;
+use music_metadata::ID3Parser;
 fn main() -> std::io::Result<()> {
-    let mut parser = ID3_Parser::new("云烟成雨.mp3").unwrap();
+    // https://drive.google.com/file/d/1fp_TYclIKZAWMwFTnxEEe4PqJCuBqHl4/view?usp=sharing
+    let mut parser = ID3Parser::new("云烟成雨.mp3").unwrap();
     
     parser.parse_id3v1()?;
     // The ID3v1 protocol does not specify the content encoding, 
@@ -59,7 +60,6 @@ fn main() -> std::io::Result<()> {
     parser.write_image()?;
     Ok(())
 }
-
 ```
 
 ## License
