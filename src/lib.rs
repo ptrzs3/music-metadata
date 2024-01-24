@@ -302,7 +302,7 @@ where
         let mut buffer_reader = FlacBufferReader::new(&self.fp)?;
         let mut buffer: Buffer;
         buffer = buffer_reader.read_block_header()?;
-        if let Err(_) = parse_flac_marker(&buffer) {
+        if parse_flac_marker(&buffer).is_err() {
             println!("not include flac header");
             return Ok(());
         }

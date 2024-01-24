@@ -1,4 +1,5 @@
 #[derive(Debug)]
+#[derive(Default)]
 pub struct BlockPicture {
     pub pic_type: PicType,
     pub mime: String,
@@ -36,24 +37,12 @@ impl BlockPicture {
     }
 }
 
-impl Default for BlockPicture {
-    fn default() -> Self {
-        BlockPicture {
-            pic_type: PicType::default(),
-            mime: String::default(),
-            description: String::default(),
-            width: u32::default(),
-            height: u32::default(),
-            bit_depth: u32::default(),
-            index_color_number: u32::default(),
-            data: Vec::default(),
-            size: u32::default(),
-        }
-    }
-}
+
 
 #[derive(Debug)]
+#[derive(Default)]
 pub enum PicType {
+    #[default]
     Other,
     FileIcon32x32,
     OtherFileIcon,
@@ -129,10 +118,5 @@ impl ToString for PicType {
             Self::BandOrArtistLogotype => String::from("BandOrArtistLogotype"),
             Self::PublisherOrStudioLogoType => String::from("PublisherOrStudioLogoType"),
         }
-    }
-}
-impl Default for PicType {
-    fn default() -> Self {
-        PicType::Other
     }
 }

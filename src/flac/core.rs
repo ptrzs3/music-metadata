@@ -37,7 +37,7 @@ pub fn parse_block_header(buffer: &Vec<u8>) -> io::Result<BlockHeader> {
         _ => BlockType::INVALID,
     };
     let length = buffer[1] as u32 * 0x10000 + buffer[2] as u32 * 0x100 + buffer[3] as u32;
-    Ok(BlockHeader::new(is_last, block_type, length as u32))
+    Ok(BlockHeader::new(is_last, block_type, length))
 }
 
 pub fn parse_stream_info_block(buffer: &Vec<u8>) -> io::Result<BlockStreamInfo> {
@@ -73,7 +73,7 @@ pub fn parse_stream_info_block(buffer: &Vec<u8>) -> io::Result<BlockStreamInfo> 
         + buffer[30] as u128 * 0x1000000
         + buffer[31] as u128 * 0x10000
         + buffer[32] as u128 * 0x100
-        + buffer[33] as u128 * 0x1; // the last 16 Bytes(=128 bits)
+        + buffer[33] as u128; // the last 16 Bytes(=128 bits)
     Ok(BlockStreamInfo::new(
         min_block_size,
         max_block_size,
@@ -111,7 +111,7 @@ pub fn parse_vorbis_comment(buf: &Vec<u8>) -> io::Result<BlockVorbisComment> {
         start = end + 1;
         end = start - 1 + tag_length as usize;
         let tag_content_raw = String::from_utf8(buffer[start..=end].to_vec()).unwrap();
-        let kv: Vec<&str> = tag_content_raw.split("=").collect();
+        let kv: Vec<&str> = tag_content_raw.split('=').collect();
         let tag_key: String = kv[0].to_owned();
         let tag_value = kv[1].to_owned();
         if let Some(index) = vorbis_comment.key_hash.get(&tag_key) {

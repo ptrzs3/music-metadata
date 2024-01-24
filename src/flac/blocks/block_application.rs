@@ -1,5 +1,6 @@
 #[derive(Debug)]
 #[allow(dead_code)]
+#[derive(Default)]
 pub struct BlockApplication {
     id: u32,
     data: Vec<u8>,
@@ -10,11 +11,4 @@ impl BlockApplication {
         BlockApplication { id, data }
     }
 }
-impl Default for BlockApplication {
-    fn default() -> Self {
-        BlockApplication {
-            id: u32::default(),
-            data: Vec::default(),
-        }
-    }
-}
+

@@ -1,4 +1,5 @@
 #[derive(Debug)]
+#[derive(Default)]
 pub struct BlockHeader {
     pub is_last: bool,
     pub block_type: BlockType,
@@ -15,17 +16,10 @@ impl BlockHeader {
     }
 }
 
-impl Default for BlockHeader {
-    fn default() -> Self {
-        BlockHeader {
-            is_last: false,
-            block_type: BlockType::default(),
-            length: u32::default(),
-        }
-    }
-}
+
 
 #[derive(Debug)]
+#[derive(Default)]
 pub enum BlockType {
     STREAMINFO,
     PADDING,
@@ -34,11 +28,8 @@ pub enum BlockType {
     VORBISCOMMENT,
     CUESHEET,
     PICTURE,
+    #[default]
     INVALID,
 }
 
-impl Default for BlockType {
-    fn default() -> Self {
-        BlockType::INVALID
-    }
-}
+
