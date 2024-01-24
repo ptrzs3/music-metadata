@@ -130,7 +130,7 @@ where
         Ok(())
     }
 
-    /// Start parse id3v1.
+    /// Start parsing id3v1.
     ///
     /// It is not recommended to call this method,
     ///
@@ -160,7 +160,7 @@ where
         Ok(())
     }
 
-    /// Start parse id3v2.
+    /// Start parsing id3v2.
     pub fn parse_id3v2(&mut self) -> io::Result<()> {
         let mut buffer_reader = ID3BufferReader::new(&self.fp)?;
 
@@ -269,13 +269,13 @@ where
     T: AsRef<Path>,
 {
     fp: T,
-    stream_info: BlockStreamInfo,
-    application: BlockApplication,
+    pub stream_info: BlockStreamInfo,
+    pub application: BlockApplication,
     pub seek_table: BlockSeekTable,
     vorbis_comment: BlockVorbisComment,
     pub picture: Vec<BlockPicture>,
-    cue_sheet: BlockCueSheet,
-    padding_length: u32,
+    pub cue_sheet: BlockCueSheet,
+    pub padding_length: u32,
 }
 
 #[allow(dead_code)]
@@ -285,6 +285,7 @@ impl<T> FlacParser<T>
 where
     T: AsRef<Path>,
 {
+    /// Create a new FlacParser
     pub fn new(fp: T) -> io::Result<Self> {
         Ok(FlacParser {
             fp,
@@ -298,54 +299,78 @@ where
         })
     }
 
+    /// Start parsing flac.
     pub fn parse(&mut self) -> io::Result<()> {
         let mut buffer_reader = FlacBufferReader::new(&self.fp)?;
         let mut buffer: Buffer;
         buffer = buffer_reader.read_block_header()?;
-        if parse_flac_marker(&buffer).is_err() {
+        if parse_flac_marker(buffer).is_err() {
             println!("not include flac header");
             return Ok(());
         }
         let mut block_header: BlockHeader = BlockHeader::default();
         while !block_header.is_last {
             buffer = buffer_reader.read_block_header()?;
-            block_header = parse_block_header(&buffer)?;
+            block_header = parse_block_header(buffer)?;
             buffer = buffer_reader.read_block_data_buffer(block_header.length)?;
             match block_header.block_type {
                 BlockType::STREAMINFO => {
-                    self.stream_info = parse_stream_info_block(&buffer)?;
+                    self.stream_info = parse_stream_info_block(buffer)?;
                 }
                 BlockType::PADDING => {
                     self.padding_length = block_header.length;
                     println!("here is padding, is last = {}", block_header.is_last);
                 }
                 BlockType::APPLICATION => {
-                    self.application = parse_block_application(&buffer)?;
+                    self.application = parse_block_application(buffer)?;
                 }
                 BlockType::SEEKTABLE => {
-                    self.seek_table = parse_block_seektable(&buffer)?;
+                    self.seek_table = parse_block_seektable(buffer)?;
                 }
                 BlockType::VORBISCOMMENT => {
-                    self.vorbis_comment = parse_vorbis_comment(&buffer)?;
+                    self.vorbis_comment = parse_vorbis_comment(buffer)?;
                 }
                 BlockType::CUESHEET => {
-                    self.cue_sheet = parse_block_cue_sheet(&buffer)?;
+                    self.cue_sheet = parse_block_cue_sheet(buffer)?;
                 }
                 BlockType::PICTURE => {
-                    self.picture.push(parse_block_picture(&buffer)?);
+                    self.picture.push(parse_block_picture(buffer)?);
                 }
                 BlockType::INVALID => todo!(),
             }
         }
         Ok(())
     }
+
+
+    /// Get vorbis comment according to query.
+    /// 
+    /// Return a Vec<String> wrapped in an Option.
     pub fn get(&mut self, query: &str) -> Option<Vec<String>> {
         let upper_query = query.to_uppercase();
-        if let Some(index) = self.vorbis_comment.key_hash.get(&upper_query) {
+        if let Some(index) = self.vorbis_comment.hm.get(&upper_query) {
             return  Some(self.vorbis_comment.comment[*index].clone());
         }
         None
     }
+
+
+    /// Given that Vorbis allows for customized key values,
+    /// 
+    /// there may be key values other than those in common use,
+    /// 
+    /// so this method is provided to print all key-value pairs.
+    pub fn get_all(&mut self) -> io::Result<(Vec<String>, Vec<Vec<String>>)> {
+        let mut key_vec: Vec<String> = Vec::default();
+        let mut value_vec: Vec<Vec<String>> = Vec::default();
+        for (key, index) in &self.vorbis_comment.hm {
+            key_vec.push(key.to_string());
+            value_vec.push(self.vorbis_comment.comment[*index].clone());
+        }
+        Ok((key_vec, value_vec))
+    }
+
+    /// Write image(s) to disk.
     pub fn write_image(&mut self) -> io::Result<()> {
         let mut t = self.fp.as_ref().to_owned();
         t.set_extension("");
@@ -365,5 +390,19 @@ where
             index += 1;
         }
         Ok(())
+    }
+
+    /// As the method says.
+    ///
+    /// In addition, its own data will be cleared.
+    pub fn change_target(&mut self, new_fp: T) {
+        self.fp = new_fp;
+        self.application = BlockApplication::default();
+        self.stream_info = BlockStreamInfo::default();
+        self.seek_table = BlockSeekTable::default();
+        self.vorbis_comment = BlockVorbisComment::default();
+        self.picture.clear();
+        self.cue_sheet = BlockCueSheet::default();
+        self.padding_length = u32::default();
     }
 }

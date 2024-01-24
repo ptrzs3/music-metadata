@@ -1,8 +1,8 @@
 [package]
 name = "music-metadata"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
-description = "A parser for id3v2.3, id3v2.4 and id3v1"
+description = "A parser for .mp3 and .flac"
 keywords = ["id3v2", "id3v1", "id3", "mp3-metadata"]
 authors = ["ptrzs <ptrzsi386@outlook.com>"]
 license = "Apache-2.0"

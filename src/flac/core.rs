@@ -18,13 +18,13 @@ use super::blocks::{
     block_vorbis_comment::BlockVorbisComment,
 };
 
-pub fn parse_flac_marker(buffer: &Vec<u8>) -> Result<(), FlacError> {
+pub fn parse_flac_marker(buffer: Vec<u8>) -> Result<(), FlacError> {
     if buffer[..] == [0x66, 0x4C, 0x61, 0x43] {
         return Ok(());
     }
     Err(FlacError::WrongHeader)
 }
-pub fn parse_block_header(buffer: &Vec<u8>) -> io::Result<BlockHeader> {
+pub fn parse_block_header(buffer: Vec<u8>) -> io::Result<BlockHeader> {
     let is_last = (buffer[0] & 0x80) == 0x80;
     let block_type: BlockType = match buffer[0] & 0x7F {
         0 => BlockType::STREAMINFO,
@@ -40,7 +40,7 @@ pub fn parse_block_header(buffer: &Vec<u8>) -> io::Result<BlockHeader> {
     Ok(BlockHeader::new(is_last, block_type, length))
 }
 
-pub fn parse_stream_info_block(buffer: &Vec<u8>) -> io::Result<BlockStreamInfo> {
+pub fn parse_stream_info_block(buffer: Vec<u8>) -> io::Result<BlockStreamInfo> {
     let min_block_size: u16 = buffer[0] as u16 * 0x100 + buffer[1] as u16; // 2 Bytes
     let max_block_size: u16 = buffer[2] as u16 * 0x100 + buffer[3] as u16; // 2 Bytes
     let min_frame_size: u32 =
@@ -86,9 +86,9 @@ pub fn parse_stream_info_block(buffer: &Vec<u8>) -> io::Result<BlockStreamInfo> 
         md5,
     ))
 }
-pub fn parse_vorbis_comment(buf: &Vec<u8>) -> io::Result<BlockVorbisComment> {
+pub fn parse_vorbis_comment(buffer: Vec<u8>) -> io::Result<BlockVorbisComment> {
     let mut vorbis_comment = BlockVorbisComment::default();
-    let buffer: Vec<u8> = buf.to_owned();
+    // let buffer: Vec<u8> = buf.to_owned();
     let mut start = 0;
     let mut end = 3;
     let encoder_length = parse_4_bytes_with_little_endian(&buffer[start..=end]);
@@ -114,19 +114,19 @@ pub fn parse_vorbis_comment(buf: &Vec<u8>) -> io::Result<BlockVorbisComment> {
         let kv: Vec<&str> = tag_content_raw.split('=').collect();
         let tag_key: String = kv[0].to_owned();
         let tag_value = kv[1].to_owned();
-        if let Some(index) = vorbis_comment.key_hash.get(&tag_key) {
+        if let Some(index) = vorbis_comment.hm.get(&tag_key) {
             vorbis_comment.comment[*index].push(tag_value);
         } else {
             let tag_index = vorbis_comment.comment.len();
-            vorbis_comment.key_hash.insert(tag_key.to_uppercase(), tag_index);
+            vorbis_comment.hm.insert(tag_key.to_uppercase(), tag_index);
             vorbis_comment.comment.push(Vec::default());
             vorbis_comment.comment[tag_index].push(tag_value);
         }
     }
     Ok(vorbis_comment)
 }
-pub fn parse_block_picture(buf: &Vec<u8>) -> io::Result<BlockPicture> {
-    let buffer: Vec<u8> = buf.to_owned();
+pub fn parse_block_picture(buffer: Vec<u8>) -> io::Result<BlockPicture> {
+    // let buffer: Vec<u8> = buf.to_owned();
     let mut start ;
     let mut end = 3;
     // let raw_pic_type = parse_4_bytes_with_big_endian(&buffer[start..=end]);
@@ -182,16 +182,16 @@ pub fn parse_block_picture(buf: &Vec<u8>) -> io::Result<BlockPicture> {
         size,
     ))
 }
-pub fn parse_block_application(buf: &Vec<u8>) -> io::Result<BlockApplication> {
-    let id = parse_4_bytes_with_big_endian(&buf[0..=3]);
-    let data: Vec<u8> = buf[4..].to_owned();
+pub fn parse_block_application(buffer: Vec<u8>) -> io::Result<BlockApplication> {
+    let id = parse_4_bytes_with_big_endian(&buffer[0..=3]);
+    let data: Vec<u8> = buffer[4..].to_owned();
     Ok(BlockApplication::new(id, data))
 }
-pub fn parse_block_seektable(buf: &Vec<u8>) -> io::Result<BlockSeekTable> {
-    let buffer = buf.to_owned();
+pub fn parse_block_seektable(buffer: Vec<u8>) -> io::Result<BlockSeekTable> {
+    // let buffer = buf.to_owned();
     let mut start = 0;
     let mut end = 7; // for the first loop
-    let length = buf.len();
+    let length = buffer.len();
     let mut seek_table: BlockSeekTable = BlockSeekTable::default();
     while end < length {
         let mut seek_point = SeekPoint::default();
@@ -222,8 +222,8 @@ pub fn parse_block_seektable(buf: &Vec<u8>) -> io::Result<BlockSeekTable> {
     Ok(seek_table)
 }
 
-pub fn parse_block_cue_sheet(buf: &Vec<u8>) -> io::Result<BlockCueSheet> {
-    let buffer = buf.to_owned();
+pub fn parse_block_cue_sheet(buffer: Vec<u8>) -> io::Result<BlockCueSheet> {
+    // let buffer = buf.to_owned();
     let mut start: usize = 0;
     let mut end: usize = 127;
     let media_catalog = String::from_utf8(buffer[start..=end].to_vec()).unwrap();

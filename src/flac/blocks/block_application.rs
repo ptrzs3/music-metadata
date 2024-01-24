@@ -2,8 +2,8 @@
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct BlockApplication {
-    id: u32,
-    data: Vec<u8>,
+    pub id: u32,
+    pub data: Vec<u8>,
 }
 
 impl BlockApplication {

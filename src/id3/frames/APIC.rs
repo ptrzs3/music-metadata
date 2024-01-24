@@ -11,6 +11,7 @@ pub struct APIC {
     MIME_type: String,
     picture_type: PicType,
     description: String,
+    // the last byte is picrture type
     data: Vec<u8>,
 }
 

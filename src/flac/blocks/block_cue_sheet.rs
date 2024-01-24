@@ -2,11 +2,11 @@
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct BlockCueSheet {
-    media_catalog: String,
-    lead_in_samples_number: u64,
-    is_cd: bool,
-    tracks_number: u8,
-    tracks: Vec<Track>,
+    pub media_catalog: String,
+    pub lead_in_samples_number: u64,
+    pub is_cd: bool,
+    pub tracks_number: u8,
+    pub tracks: Vec<Track>,
 }
 
 impl BlockCueSheet {
