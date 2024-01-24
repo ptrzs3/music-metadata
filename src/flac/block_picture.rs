@@ -1,4 +1,58 @@
 #[derive(Debug)]
+pub struct BlockPicture {
+    pub pic_type: PicType,
+    pub mime: String,
+    pub description: String,
+    pub width: u32,
+    pub height: u32,
+    pub bit_depth: u32,
+    pub index_color_number: u32,
+    pub data: Vec<u8>,
+    pub size: u32,
+}
+impl BlockPicture {
+    pub fn new(
+        pic_type: PicType,
+        mime: String,
+        description: String,
+        width: u32,
+        height: u32,
+        bit_depth: u32,
+        index_color_number: u32,
+        data: Vec<u8>,
+        size: u32,
+    ) -> Self {
+        BlockPicture {
+            pic_type,
+            mime,
+            description,
+            width,
+            height,
+            bit_depth,
+            index_color_number,
+            data,
+            size,
+        }
+    }
+}
+
+impl Default for BlockPicture {
+    fn default() -> Self {
+        BlockPicture {
+            pic_type: PicType::default(),
+            mime: String::default(),
+            description: String::default(),
+            width: u32::default(),
+            height: u32::default(),
+            bit_depth: u32::default(),
+            index_color_number: u32::default(),
+            data: Vec::default(),
+            size: u32::default(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum PicType {
     Other,
     FileIcon32x32,
@@ -48,5 +102,11 @@ impl From<u8> for PicType {
             0x14 => PicType::PublisherOrStudioLogoType,
             _ => panic!("Invalid value for conversion to PicType"),
         }
+    }
+}
+
+impl Default for PicType {
+    fn default() -> Self {
+        PicType::Other
     }
 }

@@ -1,11 +1,13 @@
-pub struct SeekTable {
+#[derive(Debug)]
+pub struct BlockSeekTable {
     pub seekpoints: Vec<SeekPoint>,
 }
-impl Default for SeekTable {
+impl Default for BlockSeekTable {
     fn default() -> Self {
-        SeekTable { seekpoints: Vec::default() }
+        BlockSeekTable { seekpoints: Vec::default() }
     }
 }
+#[derive(Debug)]
 pub struct SeekPoint {
     pub sample_number_of_first_sample: u64,
     pub offset: u64,
