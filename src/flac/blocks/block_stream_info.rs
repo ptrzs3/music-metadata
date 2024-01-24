@@ -1,4 +1,5 @@
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct BlockStreamInfo {
     min_block_size: u16,
     max_block_size: u16,

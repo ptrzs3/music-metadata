@@ -1,7 +1,7 @@
 use crate::util::{self, Buffer};
 
 use super::{
-    common, error::header_error::HeaderError, extended_header::ExtendedHeader, footer::Footer, frames::{
+    common, extended_header::ExtendedHeader, footer::Footer, frames::{
         common::{Encoding, Tape},
         header::FrameHeader,
         identifiers::{
@@ -17,10 +17,10 @@ use super::{
         TXXX::TXXX,
         USLT::USLT,
         WXXX::WXXX,
-    }, protocol_header::{Flag, ProtocolHeader}, version::Version
+    }, error::ID3Error, protocol_header::{Flag, ProtocolHeader}, version::Version
 };
 
-pub fn parse_protocol_header(header: &Buffer) -> Result<ProtocolHeader, HeaderError> {
+pub fn parse_protocol_header(header: &Buffer) -> Result<ProtocolHeader, ID3Error> {
     let protocol_header = ProtocolHeader {
         identifier: String::from_utf8_lossy(&header[..=2]).into_owned(),
         major_version: {
@@ -33,7 +33,7 @@ pub fn parse_protocol_header(header: &Buffer) -> Result<ProtocolHeader, HeaderEr
             {
                 Version::V4
             } else {
-                return Err(HeaderError::Unimplement("Wrong Header".to_string(), 1));
+                return Err(ID3Error::Unimplement("Wrong Header".to_string(), 1));
             }
         },
         revision: header[4],
@@ -43,7 +43,7 @@ pub fn parse_protocol_header(header: &Buffer) -> Result<ProtocolHeader, HeaderEr
     Ok(protocol_header)
 }
 
-pub fn parse_footer_buffer(footer: &Buffer) -> Result<Footer, HeaderError> {
+pub fn parse_footer_buffer(footer: &Buffer) -> Result<Footer, ID3Error> {
     Ok(Footer::from(parse_protocol_header(footer)?))
 }
 
@@ -54,7 +54,7 @@ pub fn parse_extended_header(header: &Buffer, version: &Version) -> ExtendedHead
         header[4..].into(),
     )
 }
-pub fn parse_frame_header(header: &Buffer, version: &Version) -> Result<FrameHeader, HeaderError> {
+pub fn parse_frame_header(header: &Buffer, version: &Version) -> Result<FrameHeader, ID3Error> {
     let frame_header = FrameHeader {
         identifier: IDFactory::from(header[0..=3].to_vec()),
         size: common::get_size(header[4..8].to_vec(), version),
@@ -62,10 +62,10 @@ pub fn parse_frame_header(header: &Buffer, version: &Version) -> Result<FrameHea
         version: version.clone(),
     };
     if let IDFactory::R(RarelyUsedFrameIdentifier::UNIMPLEMENT(id)) = frame_header.identifier {
-        return Err(HeaderError::Unimplement(id, frame_header.size));
+        return Err(ID3Error::Unimplement(id, frame_header.size));
     }
     if let IDFactory::PADDING = frame_header.identifier {
-        return Err(HeaderError::IsPadding);
+        return Err(ID3Error::IsPadding);
     }
     Ok(frame_header)
 }
@@ -73,7 +73,7 @@ pub fn parse_frame_header(header: &Buffer, version: &Version) -> Result<FrameHea
 pub fn parse_frame_payload(
     payload: &Buffer,
     header: &FrameHeader,
-) -> Result<Box<dyn Tape>, HeaderError> {
+) -> Result<Box<dyn Tape>, ID3Error> {
     match &header.identifier {
         IDFactory::T(id) => {
             if let TextInformationFrameIdentifier::TXXX = id {
@@ -125,7 +125,7 @@ pub fn parse_frame_payload(
 fn parse_text_infomation_frame(
     identifier: String,
     payload: Buffer,
-) -> Result<TextInfomationFrame, HeaderError> {
+) -> Result<TextInfomationFrame, ID3Error> {
     let mut encoding = common::get_encoding(payload[0])?;
     let mut cursor: usize = 1;
     if let Encoding::UTF16_WITH_BOM = encoding {
@@ -139,13 +139,13 @@ fn parse_text_infomation_frame(
 fn parse_url_link_frame(
     identifier: String,
     payload: Buffer,
-) -> Result<URLLinkFrame, HeaderError> {
+) -> Result<URLLinkFrame, ID3Error> {
     let data = common::get_text(&Encoding::UTF8, &payload[..])?;
     Ok(URLLinkFrame::new(identifier, data))
 }
 
 #[allow(non_snake_case)]
-fn parse_TXXX(payload: Buffer) -> Result<TXXX, HeaderError> {
+fn parse_TXXX(payload: Buffer) -> Result<TXXX, ID3Error> {
     let mut encoding = common::get_encoding(payload[0])?;
     let mut cursor = 1;
     if let Encoding::UTF16_WITH_BOM = encoding {
@@ -160,7 +160,7 @@ fn parse_TXXX(payload: Buffer) -> Result<TXXX, HeaderError> {
 }
 
 #[allow(non_snake_case)]
-fn parse_WXXX(payload: Buffer) -> Result<WXXX, HeaderError> {
+fn parse_WXXX(payload: Buffer) -> Result<WXXX, ID3Error> {
     let mut encoding = common::get_encoding(payload[0])?;
     let mut cursor = 1;
     if let Encoding::UTF16_WITH_BOM = encoding {
@@ -175,7 +175,7 @@ fn parse_WXXX(payload: Buffer) -> Result<WXXX, HeaderError> {
 }
 
 #[allow(non_snake_case)]
-fn parse_USLT(payload: Buffer) -> Result<USLT, HeaderError> {
+fn parse_USLT(payload: Buffer) -> Result<USLT, ID3Error> {
     let frame_encoding = common::get_encoding(payload[0])?;
     let mut data_encoding = common::get_encoding(payload[0])?;
     let language: String = String::from_utf8(payload[1..=3].into()).expect("");
@@ -196,7 +196,7 @@ fn parse_USLT(payload: Buffer) -> Result<USLT, HeaderError> {
 }
 
 #[allow(non_snake_case)]
-fn parse_SYLT(payload: Buffer) -> Result<SYLT, HeaderError> {
+fn parse_SYLT(payload: Buffer) -> Result<SYLT, ID3Error> {
     let frame_encoding = common::get_encoding(payload[0])?;
     let language: String = String::from_utf8(payload[1..=3].into()).expect("");
     let timestamp_format: u8 = payload[4];
@@ -217,7 +217,7 @@ fn parse_SYLT(payload: Buffer) -> Result<SYLT, HeaderError> {
 }
 
 #[allow(non_snake_case)]
-fn parse_COMM(payload: Buffer) -> Result<COMM, HeaderError> {
+fn parse_COMM(payload: Buffer) -> Result<COMM, ID3Error> {
     let frame_encoding = common::get_encoding(payload[0])?;
     let mut data_encoding = common::get_encoding(payload[0])?;
     let language: String = String::from_utf8(payload[1..=3].into()).expect("");
@@ -238,12 +238,13 @@ fn parse_COMM(payload: Buffer) -> Result<COMM, HeaderError> {
 }
 
 #[allow(non_snake_case)]
-fn parse_APIC(payload: Buffer) -> Result<APIC, HeaderError> {
+fn parse_APIC(payload: Buffer) -> Result<APIC, ID3Error> {
     let mut encoding = common::get_encoding(payload[0])?;
     let mut cursor: usize = 1;
     let (MIME_type, skip): (String, usize) =
         common::get_text_according_to_encoding(&payload[cursor..], &Encoding::UTF8)?;
     cursor += skip;
+    let raw_pic_type = payload[cursor];
     let picture_type: PicType = PicType::from(payload[cursor]);
     cursor += 1;
     if let Encoding::UTF16_WITH_BOM = encoding {
@@ -253,7 +254,8 @@ fn parse_APIC(payload: Buffer) -> Result<APIC, HeaderError> {
     let (description, skip): (String, usize) =
         common::get_text_according_to_encoding(&payload[cursor..], &encoding)?;
     cursor += skip;
-    let data: Vec<u8> = payload[cursor..].into();
+    let mut data: Vec<u8> = payload[cursor..].into();
+    data.push(raw_pic_type);
     Ok(APIC::new(
         encoding,
         MIME_type,
@@ -264,6 +266,6 @@ fn parse_APIC(payload: Buffer) -> Result<APIC, HeaderError> {
 }
 
 #[allow(non_snake_case)]
-fn parse_RarelyUsed(identifier: String, payload: Buffer) -> Result<RarelyUsed, HeaderError> {
+fn parse_RarelyUsed(identifier: String, payload: Buffer) -> Result<RarelyUsed, ID3Error> {
     Ok(RarelyUsed::new(identifier, payload))
 }

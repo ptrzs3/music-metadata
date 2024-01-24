@@ -1,6 +1,5 @@
 use std::collections::VecDeque;
-
-use crate::id3::{error::header_error::HeaderError, frames::header::Byte};
+use crate::id3::{error::ID3Error, frames::header::Byte};
 pub type Buffer = Vec<u8>;
 
 pub fn map_to_binary(decimal: &[u8]) -> Vec<Byte> {
@@ -16,7 +15,7 @@ pub fn map_to_binary(decimal: &[u8]) -> Vec<Byte> {
 }
 
 
-pub fn into_big_endian_u16(text: &[u8], reverse: bool) -> Result<Vec<u16>, HeaderError> {
+pub fn into_big_endian_u16(text: &[u8], reverse: bool) -> Result<Vec<u16>, ID3Error> {
     let mut big_endian_u16: Vec<u16> = Vec::new();
     match reverse {
         true => {

@@ -1,4 +1,3 @@
-pub mod error;
 pub mod protocol_header;
 pub mod extended_header;
 pub mod frames;
@@ -8,3 +7,4 @@ pub mod id3v1_tag;
 pub mod core;
 pub mod common;
 pub mod id3_buffer_reader;
+pub mod error;

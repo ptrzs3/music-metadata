@@ -104,7 +104,33 @@ impl From<u8> for PicType {
         }
     }
 }
-
+impl ToString for PicType {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Other => String::from("Other"),
+            Self::FileIcon32x32 => String::from("FileIcon32x32"),
+            Self::OtherFileIcon => String::from("OtherFileIcon"),
+            Self::FrontCover => String::from("FrontCover"),
+            Self::BackCover => String::from("BackCover"),
+            Self::LeafletPage => String::from("LeafletPage"),
+            Self::Media => String::from("Media"),
+            Self::LeadArtist => String::from("LeadArtist"),
+            Self::ArtistOrPerformer => String::from("ArtistOrPerformer"),
+            Self::Conductor => String::from("Conductor"),
+            Self::BandOrOrchestra => String::from("BandOrOrchestra"),
+            Self::Composer => String::from("Composer"),
+            Self::LyricistWriter => String::from("LyricistWriter"),
+            Self::RecordingLocation => String::from("RecordingLocation"),
+            Self::DuringRecording => String::from("DuringRecording"),
+            Self::DuringPerformence => String::from("DuringPerformence"),
+            Self::MovieOrVideoScreenCapture => String::from("MovieOrVideoScreenCapture"),
+            Self::ABrightColouredFish => String::from("ABrightColouredFish"),
+            Self::Illustration => String::from("Illustration"),
+            Self::BandOrArtistLogotype => String::from("BandOrArtistLogotype"),
+            Self::PublisherOrStudioLogoType => String::from("PublisherOrStudioLogoType"),
+        }
+    }
+}
 impl Default for PicType {
     fn default() -> Self {
         PicType::Other

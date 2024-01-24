@@ -1,4 +1,5 @@
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct BlockApplication {
     id: u32,
     data: Vec<u8>,

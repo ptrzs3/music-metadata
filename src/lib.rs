@@ -10,27 +10,32 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use flac::block_application::BlockApplication;
-use flac::block_header::{BlockHeader, BlockType};
-use flac::block_picture::BlockPicture;
-use flac::block_seektable::BlockSeekTable;
-use flac::block_vorbis_comment::BlockVorbisComment;
+use flac::blocks::{
+    block_application::BlockApplication,
+    block_cue_sheet::BlockCueSheet,
+    block_header::{BlockHeader, BlockType},
+    block_picture::BlockPicture,
+    block_seektable::BlockSeekTable,
+    block_stream_info::BlockStreamInfo,
+    block_vorbis_comment::BlockVorbisComment,
+};
+use flac::core::parse_block_cue_sheet;
 use flac::flac_buffer_reader::FlacBufferReader;
-use flac::block_stream_info::BlockStreamInfo;
-use id3::core::{
+use id3::{core::{
     parse_extended_header, parse_footer_buffer, parse_frame_header, parse_frame_payload,
     parse_protocol_header,
+}, frames::APIC::PicType};
+use id3::{
+    error::ID3Error, extended_header::ExtendedHeader, footer::Footer, frames::common::Tape,
+    id3_buffer_reader::ID3BufferReader, id3v1_tag::ID3v1, protocol_header::ProtocolHeader,
 };
-use id3::error::header_error::HeaderError;
-use id3::extended_header::ExtendedHeader;
-use id3::footer::Footer;
-use id3::frames::common::Tape;
-use id3::id3_buffer_reader::ID3BufferReader;
-use id3::id3v1_tag::ID3v1;
-use id3::protocol_header::ProtocolHeader;
+
 use util::Buffer;
 
-use crate::flac::core::{parse_flac_marker, parse_block_header, parse_stream_info_block, parse_block_application, parse_block_seektable, parse_vorbis_comment, parse_block_picture};
+use flac::core::{
+    parse_block_application, parse_block_header, parse_block_picture, parse_block_seektable,
+    parse_flac_marker, parse_stream_info_block, parse_vorbis_comment,
+};
 
 pub struct ID3Parser<T>
 where
@@ -191,7 +196,7 @@ where
                     start += 10 + v.size;
                 }
                 Err(e) => match e {
-                    HeaderError::IsPadding => {
+                    ID3Error::IsPadding => {
                         self.padding_size = self.pheader.size - start;
                         if self.pheader.flags.Footer {
                             // 将reader的指针定位到footer第一个字节
@@ -201,7 +206,7 @@ where
                         }
                         return Ok(());
                     }
-                    HeaderError::Unimplement(id, skip) => {
+                    ID3Error::Unimplement(id, skip) => {
                         let buf = buffer_reader.skip(skip)?;
                         start += 10 + skip;
                         println!(
@@ -211,7 +216,7 @@ raw: {:?}",
                             id, buf
                         );
                     }
-                    HeaderError::UnknownError(s) => {
+                    ID3Error::UnknownError(s) => {
                         println!("{s}");
                         println!("The parser is stopped");
                         return Ok(());
@@ -239,7 +244,10 @@ raw: {:?}",
         t.set_extension("");
         if let Some(index) = self.hm.get("APIC") {
             for (index, d) in self.frames[*index].iter().enumerate() {
+                let pic_type = PicType::from(d.raw().pop().unwrap()).to_string();
                 let mut fname: OsString = OsString::from(&t);
+                fname.push("_mp3_");
+                fname.push(pic_type);
                 if index > 0 {
                     fname.push("_");
                     fname.push(index.to_string());
@@ -263,9 +271,11 @@ where
     fp: T,
     stream_info: BlockStreamInfo,
     application: BlockApplication,
-    seek_table: BlockSeekTable,
+    pub seek_table: BlockSeekTable,
     vorbis_comment: BlockVorbisComment,
-    picture: BlockPicture,
+    pub picture: Vec<BlockPicture>,
+    cue_sheet: BlockCueSheet,
+    padding_length: u32,
 }
 
 #[allow(dead_code)]
@@ -282,7 +292,9 @@ where
             application: BlockApplication::default(),
             seek_table: BlockSeekTable::default(),
             vorbis_comment: BlockVorbisComment::default(),
-            picture: BlockPicture::default()
+            picture: Vec::default(),
+            cue_sheet: BlockCueSheet::default(),
+            padding_length: u32::default(),
         })
     }
 
@@ -302,29 +314,55 @@ where
             match block_header.block_type {
                 BlockType::STREAMINFO => {
                     self.stream_info = parse_stream_info_block(&buffer)?;
-                },
+                }
                 BlockType::PADDING => {
+                    self.padding_length = block_header.length;
                     println!("here is padding, is last = {}", block_header.is_last);
-                },
+                }
                 BlockType::APPLICATION => {
-                    // buffer = buffer_reader.read_block_data_buffer(block_header.length)?;
                     self.application = parse_block_application(&buffer)?;
                 }
                 BlockType::SEEKTABLE => {
-                    // buffer = buffer_reader.read_block_data_buffer(block_header.length)?;
                     self.seek_table = parse_block_seektable(&buffer)?;
                 }
                 BlockType::VORBISCOMMENT => {
-                    // buffer = buffer_reader.read_block_data_buffer(block_header.length)?;
                     self.vorbis_comment = parse_vorbis_comment(&buffer)?;
                 }
-                BlockType::CUESHEET => todo!(),
+                BlockType::CUESHEET => {
+                    self.cue_sheet = parse_block_cue_sheet(&buffer)?;
+                }
                 BlockType::PICTURE => {
-                    // buffer = buffer_reader.read_block_data_buffer(block_header.length)?;
-                    self.picture = parse_block_picture(&buffer)?;
+                    self.picture.push(parse_block_picture(&buffer)?);
                 }
                 BlockType::INVALID => todo!(),
             }
+        }
+        Ok(())
+    }
+    pub fn get(&mut self, query: &str) -> Option<Vec<String>> {
+        let upper_query = query.to_uppercase();
+        if let Some(index) = self.vorbis_comment.key_hash.get(&upper_query) {
+            return  Some(self.vorbis_comment.comment[*index].clone());
+        }
+        None
+    }
+    pub fn write_image(&mut self) -> io::Result<()> {
+        let mut t = self.fp.as_ref().to_owned();
+        t.set_extension("");
+        let mut index = 0;
+        while index < self.picture.len() {
+            let mut raw_data = self.picture[index].data.clone();
+            let pic_type = PicType::from(raw_data.pop().unwrap()).to_string();
+            let mut fname: OsString = OsString::from(&t);
+            fname.push("_flac_");
+            fname.push(pic_type);
+            if index > 0 {
+                fname.push("_");
+                fname.push(index.to_string());
+            }
+            fname.push(".jpg");
+            fs::write(fname, raw_data)?;
+            index += 1;
         }
         Ok(())
     }

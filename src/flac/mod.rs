@@ -1,9 +1,4 @@
-pub mod block_header;
-pub mod block_stream_info;
-pub mod block_application;
 pub mod flac_buffer_reader;
 pub mod error;
 pub mod core;
-pub mod block_picture;
-pub mod block_seektable;
-pub mod block_vorbis_comment;
+pub mod blocks;

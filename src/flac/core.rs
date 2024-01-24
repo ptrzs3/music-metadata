@@ -1,15 +1,16 @@
 use std::io;
 
 use crate::{
-    flac::{block_picture::PicType, error::FlacError},
+    flac::{blocks::block_picture::PicType, error::FlacError},
     util::{
         parse_4_bytes_with_big_endian, parse_4_bytes_with_little_endian,
         parse_8_bytes_with_big_endian,
     },
 };
 
-use super::{
+use super::blocks::{
     block_application::BlockApplication,
+    block_cue_sheet::{BlockCueSheet, Track, TrackIndex},
     block_header::{BlockHeader, BlockType},
     block_picture::BlockPicture,
     block_seektable::{BlockSeekTable, SeekPoint},
@@ -116,20 +117,21 @@ pub fn parse_vorbis_comment(buf: &Vec<u8>) -> io::Result<BlockVorbisComment> {
         if let Some(index) = vorbis_comment.key_hash.get(&tag_key) {
             vorbis_comment.comment[*index].push(tag_value);
         } else {
-            let len = vorbis_comment.comment.len();
-            vorbis_comment.key_hash.insert(tag_key, len);
+            let tag_index = vorbis_comment.comment.len();
+            vorbis_comment.key_hash.insert(tag_key.to_uppercase(), tag_index);
             vorbis_comment.comment.push(Vec::default());
-            vorbis_comment.comment[len].push(tag_value);
+            vorbis_comment.comment[tag_index].push(tag_value);
         }
     }
     Ok(vorbis_comment)
 }
 pub fn parse_block_picture(buf: &Vec<u8>) -> io::Result<BlockPicture> {
     let buffer: Vec<u8> = buf.to_owned();
-    let mut start = 0;
+    let mut start ;
     let mut end = 3;
-    let pic_type: PicType =
-        PicType::from(parse_4_bytes_with_big_endian(&buffer[start..=end]) as u8);
+    // let raw_pic_type = parse_4_bytes_with_big_endian(&buffer[start..=end]);
+    let raw_pic_type = buffer[end];
+    let pic_type: PicType = PicType::from(raw_pic_type);
     start = end + 1;
     end = start - 1 + 4;
     let mime_length = parse_4_bytes_with_big_endian(&buffer[start..=end]);
@@ -166,8 +168,8 @@ pub fn parse_block_picture(buf: &Vec<u8>) -> io::Result<BlockPicture> {
     let size = parse_4_bytes_with_big_endian(&buffer[start..=end]);
 
     start = end + 1;
-    let data: Vec<u8> = buffer[start..].to_vec();
-
+    let mut data: Vec<u8> = buffer[start..].to_vec();
+    data.push(raw_pic_type);
     Ok(BlockPicture::new(
         pic_type,
         mime,
@@ -190,11 +192,9 @@ pub fn parse_block_seektable(buf: &Vec<u8>) -> io::Result<BlockSeekTable> {
     let mut start = 0;
     let mut end = 7; // for the first loop
     let length = buf.len();
-    let mut index = 0;
     let mut seek_table: BlockSeekTable = BlockSeekTable::default();
-    while index < length {
+    while end < length {
         let mut seek_point = SeekPoint::default();
-        index += 1;
 
         let snfs = parse_8_bytes_with_big_endian(&buffer[start..=end]);
         seek_point.sample_number_of_first_sample = snfs;
@@ -217,7 +217,100 @@ pub fn parse_block_seektable(buf: &Vec<u8>) -> io::Result<BlockSeekTable> {
         seek_table.seekpoints.push(seek_point);
 
         start = end + 1;
-        start = end - 1 + 8; // for next loop
+        end = start - 1 + 8; // for next loop
     }
     Ok(seek_table)
+}
+
+pub fn parse_block_cue_sheet(buf: &Vec<u8>) -> io::Result<BlockCueSheet> {
+    let buffer = buf.to_owned();
+    let mut start: usize = 0;
+    let mut end: usize = 127;
+    let media_catalog = String::from_utf8(buffer[start..=end].to_vec()).unwrap();
+
+    start = end + 1;
+    end = start - 1 + 8;
+    let lead_in_samples_number: u64 = parse_8_bytes_with_big_endian(&buffer[start..=end]);
+
+    start = end + 1;
+    end = start - 1 + 1;
+    let is_cd: bool = ((buffer[start] & 0x80) >> 7) == 1;
+
+    start = end + 1;
+    end = start - 1 + 258;
+    // skip 7 bits + 258 bytes
+
+    start = end + 1;
+    end = start - 1 + 1;
+    let tracks_number: u8 = buffer[start];
+
+    let mut tracks: Vec<Track> = Vec::default();
+
+    let mut i = 0;
+    while i < tracks_number {
+        i += 1;
+        // let mut track = Track::default();
+        start = end + 1;
+        end = start - 1 + 8;
+        let offset: u64 = parse_8_bytes_with_big_endian(&buffer[start..=end]);
+
+        start = end + 1;
+        end = start - 1 + 1;
+        let number = buffer[start];
+
+        start = end + 1;
+        end = start - 1 + 12;
+        let isrc = String::from_utf8(buffer[start..=end].to_vec())
+            .to_owned()
+            .unwrap();
+
+        start = end + 1;
+        end = start - 1 + 1;
+        let is_audio_track: bool = ((buffer[start] & 0x80) >> 7) == 0;
+
+        let pre_emphasis: bool = ((buffer[start] & 0x40) >> 6) == 1;
+
+        start = end + 1;
+        end = start - 1 + 13;
+        // skip 6 bits and 13 bytes
+
+        start = end + 1;
+        end = start - 1 + 1;
+        let track_index_points_number: u8 = buffer[start];
+
+        let mut j = 0;
+        let mut track_indices: Vec<TrackIndex> = Vec::default();
+        while j < track_index_points_number {
+            j += 1;
+            start = end + 1;
+            end = start - 1 + 8;
+            let index_offset = parse_8_bytes_with_big_endian(&buffer[start..=end]);
+
+            start = end + 1;
+            end = start - 1 + 1;
+            let index_point_number = buffer[start];
+
+            start = end + 1;
+            end = start - 1 + 3;
+            // skip 3 bytes
+            track_indices.push(TrackIndex::new(index_offset, index_point_number))
+        }
+
+        tracks.push(Track::new(
+            offset,
+            number,
+            isrc,
+            is_audio_track,
+            pre_emphasis,
+            track_index_points_number,
+            track_indices,
+        ));
+    }
+    Ok(BlockCueSheet::new(
+        media_catalog,
+        lead_in_samples_number,
+        is_cd,
+        tracks_number,
+        tracks,
+    ))
 }

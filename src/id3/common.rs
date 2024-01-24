@@ -1,13 +1,15 @@
 use std::collections::VecDeque;
 
 use crate::{
-    id3::{error::header_error::HeaderError, frames::common::Encoding, version::Version},
+    id3::{ frames::common::Encoding, version::Version},
     util,
 };
 
+use super::error::ID3Error;
+
 // use super::version::Version;
 
-pub fn get_text(encoding: &Encoding, payload: &[u8]) -> Result<String, HeaderError> {
+pub fn get_text(encoding: &Encoding, payload: &[u8]) -> Result<String, ID3Error> {
     let text = match encoding {
         Encoding::ISO_8859_1 => util::latin1_to_string(payload),
         Encoding::UTF16_BE => {
@@ -32,14 +34,14 @@ pub fn get_text(encoding: &Encoding, payload: &[u8]) -> Result<String, HeaderErr
     Ok(text)
 }
 
-pub fn get_encoding(payload: u8) -> Result<Encoding, HeaderError> {
+pub fn get_encoding(payload: u8) -> Result<Encoding, ID3Error> {
     let encoding = match payload {
         0x00 => Encoding::ISO_8859_1,
         0x01 => Encoding::UTF16_WITH_BOM,
         0x02 => Encoding::UTF16_BE,
         0x03 => Encoding::UTF8,
         _ => {
-            return Err(HeaderError::UnknownError(
+            return Err(ID3Error::UnknownError(
                 "Out-of-bounds indexing".to_string(),
             ))
         }
@@ -50,7 +52,7 @@ pub fn get_encoding(payload: u8) -> Result<Encoding, HeaderError> {
 pub fn get_text_according_to_encoding(
     payload: &[u8],
     encoding: &Encoding,
-) -> Result<(String, usize), HeaderError> {
+) -> Result<(String, usize), ID3Error> {
     let mut cursor: usize = 0;
     let mut text_vec: Vec<u8> = Vec::new();
     let mut text: String;
@@ -99,7 +101,7 @@ pub fn get_text_according_to_encoding(
             }
             Ok((text, cursor + 1))
         }
-        _ => Err(HeaderError::UnknownError(
+        _ => Err(ID3Error::UnknownError(
             "UTF16_WITH_BOM is not allowed".to_string(),
         )),
     }
