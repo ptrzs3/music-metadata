@@ -14,7 +14,9 @@ Music Metadata Parser for Developer
 
 ✔️Flac
 
-Developing other music formats such as ape, ogg, etc.
+✔️ogg
+
+Developing other music formats such as ape, etc.
 
 
 
@@ -95,6 +97,11 @@ fn main() -> std::io::Result<()> {
     flac_parser.write_image()?;
 
     flac_parser.change_target("千千阙歌.flac");
+    
+    let mut ogg_parser = OggParser::new("xhh.ogg");
+    ogg_parser.parse()?;
+    println!("ogg_vorbis_comment = {:?}", ogg_parser.get_all());
+    
     Ok(())
 }
 ```
