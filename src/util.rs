@@ -75,3 +75,7 @@ pub fn parse_8_bytes_with_big_endian(buffer: &[u8]) -> u64 {
         + buffer[1] as u64 * 0x1000000000000
         + buffer[0] as u64 * 0x100000000000000
 }
+pub fn update_start_end(start: &mut usize, end: &mut usize, value: usize) {
+    *start = *end + 1;
+    *end = *start - 1 + value;
+}

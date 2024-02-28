@@ -3,8 +3,7 @@ use std::io;
 use crate::{
     flac::{blocks::block_picture::PicType, error::FlacError},
     util::{
-        parse_4_bytes_with_big_endian, parse_4_bytes_with_little_endian,
-        parse_8_bytes_with_big_endian,
+        parse_4_bytes_with_big_endian, parse_4_bytes_with_little_endian, parse_8_bytes_with_big_endian, update_start_end
     },
 };
 
@@ -93,23 +92,28 @@ pub fn parse_vorbis_comment(buffer: Vec<u8>) -> io::Result<BlockVorbisComment> {
     let mut end = 3;
     let encoder_length = parse_4_bytes_with_little_endian(&buffer[start..=end]);
 
-    start = end + 1;
-    end = start - 1 + encoder_length as usize;
+    update_start_end(&mut start, &mut end, encoder_length as usize);
+    // start = end + 1;
+    // end = start - 1 + encoder_length as usize;
     let encoder: String = String::from_utf8(buffer[start..=end].to_vec()).unwrap();
     vorbis_comment.encoder = encoder;
-    start = end + 1;
-    end = start - 1 + 4;
+
+    update_start_end(&mut start, &mut end, 4);
+    // start = end + 1;
+    // end = start - 1 + 4;
     let tags_number = parse_4_bytes_with_little_endian(&buffer[start..=end]);
 
     let mut tag_index = 0;
 
     while tag_index < tags_number {
         tag_index += 1;
-        start = end + 1;
-        end = start - 1 + 4;
+        update_start_end(&mut start, &mut end, 4);
+        // start = end + 1;
+        // end = start - 1 + 4;
         let tag_length = parse_4_bytes_with_little_endian(&buffer[start..=end]);
-        start = end + 1;
-        end = start - 1 + tag_length as usize;
+        update_start_end(&mut start, &mut end, tag_length as usize);
+        // start = end + 1;
+        // end = start - 1 + tag_length as usize;
         let tag_content_raw = String::from_utf8(buffer[start..=end].to_vec()).unwrap();
         let kv: Vec<&str> = tag_content_raw.split('=').collect();
         let tag_key: String = kv[0].to_owned();
@@ -127,44 +131,54 @@ pub fn parse_vorbis_comment(buffer: Vec<u8>) -> io::Result<BlockVorbisComment> {
 }
 pub fn parse_block_picture(buffer: Vec<u8>) -> io::Result<BlockPicture> {
     // let buffer: Vec<u8> = buf.to_owned();
-    let mut start ;
+    let mut start = 4 ;
     let mut end = 3;
     // let raw_pic_type = parse_4_bytes_with_big_endian(&buffer[start..=end]);
     let raw_pic_type = buffer[end];
     let pic_type: PicType = PicType::from(raw_pic_type);
-    start = end + 1;
-    end = start - 1 + 4;
+    update_start_end(&mut start, &mut end, 4);
+    // start = end + 1;
+    // end = start - 1 + 4;
     let mime_length = parse_4_bytes_with_big_endian(&buffer[start..=end]);
-    start = end + 1;
-    end = start - 1 + mime_length as usize;
+    
+    update_start_end(&mut start, &mut end, mime_length as usize);
+    // start = end + 1;
+    // end = start - 1 + mime_length as usize;
     let mime: String = String::from_utf8(buffer[start..=end].to_vec()).unwrap();
-
-    start = end + 1;
-    end = start - 1 + 4;
+    
+    update_start_end(&mut start, &mut end, 4);
+    // start = end + 1;
+    // end = start - 1 + 4;
     let desc_length = parse_4_bytes_with_big_endian(&buffer[start..=end]);
 
-    start = end + 1;
-    end = start - 1 + desc_length as usize;
+    update_start_end(&mut start, &mut end, desc_length as usize);
+    // start = end + 1;
+    // end = start - 1 + desc_length as usize;
     let description: String = String::from_utf8(buffer[start..=end].to_vec()).unwrap();
 
-    start = end + 1;
-    end = start - 1 + 4;
+    update_start_end(&mut start, &mut end, 4);
+    // start = end + 1;
+    // end = start - 1 + 4;
     let width = parse_4_bytes_with_big_endian(&buffer[start..=end]);
 
-    start = end + 1;
-    end = start - 1 + 4;
+    update_start_end(&mut start, &mut end, 4);
+    // start = end + 1;
+    // end = start - 1 + 4;
     let height = parse_4_bytes_with_big_endian(&buffer[start..=end]);
 
-    start = end + 1;
-    end = start - 1 + 4;
+    update_start_end(&mut start, &mut end, 4);
+    // start = end + 1;
+    // end = start - 1 + 4;
     let bit_depth = parse_4_bytes_with_big_endian(&buffer[start..=end]);
 
-    start = end + 1;
-    end = start - 1 + 4;
+    update_start_end(&mut start, &mut end, 4);
+    // start = end + 1;
+    // end = start - 1 + 4;
     let index_color_number = parse_4_bytes_with_big_endian(&buffer[start..=end]);
 
-    start = end + 1;
-    end = start - 1 + 4;
+    update_start_end(&mut start, &mut end, 4);
+    // start = end + 1;
+    // end = start - 1 + 4;
     let size = parse_4_bytes_with_big_endian(&buffer[start..=end]);
 
     start = end + 1;
@@ -200,24 +214,30 @@ pub fn parse_block_seektable(buffer: Vec<u8>) -> io::Result<BlockSeekTable> {
         seek_point.sample_number_of_first_sample = snfs;
         if snfs == 0xFFFFFFFFFFFFFFFF {
             seek_table.seekpoints.push(seek_point);
-            start = end + 1;
-            end = start - 1 + 8; // for next loop
+
+            update_start_end(&mut start, &mut end, 8);
+            // start = end + 1;
+            // end = start - 1 + 8; // for next loop
             continue;
         }
-        start = end + 1;
-        end = start - 1 + 8;
+        
+        update_start_end(&mut start, &mut end, 8);
+        // start = end + 1;
+        // end = start - 1 + 8;
         let offset = parse_8_bytes_with_big_endian(&buffer[start..=end]);
         seek_point.offset = offset;
 
-        start = end + 1;
-        end = start - 1 + 2;
+        update_start_end(&mut start, &mut end, 2);
+        // start = end + 1;
+        // end = start - 1 + 2;
         let na = buffer[start] as u16 * 0x100 + buffer[end] as u16;
         seek_point.number_of_samples = na;
 
         seek_table.seekpoints.push(seek_point);
 
-        start = end + 1;
-        end = start - 1 + 8; // for next loop
+        update_start_end(&mut start, &mut end, 8);
+        // start = end + 1;
+        // end = start - 1 + 8; // for next loop
     }
     Ok(seek_table)
 }
@@ -228,20 +248,24 @@ pub fn parse_block_cue_sheet(buffer: Vec<u8>) -> io::Result<BlockCueSheet> {
     let mut end: usize = 127;
     let media_catalog = String::from_utf8(buffer[start..=end].to_vec()).unwrap();
 
-    start = end + 1;
-    end = start - 1 + 8;
+    update_start_end(&mut start, &mut end, 8);
+    // start = end + 1;
+    // end = start - 1 + 8;
     let lead_in_samples_number: u64 = parse_8_bytes_with_big_endian(&buffer[start..=end]);
 
-    start = end + 1;
-    end = start - 1 + 1;
+    update_start_end(&mut start, &mut end, 1);
+    // start = end + 1;
+    // end = start - 1 + 1;
     let is_cd: bool = ((buffer[start] & 0x80) >> 7) == 1;
 
-    start = end + 1;
-    end = start - 1 + 258;
+    update_start_end(&mut start, &mut end, 258);
+    // start = end + 1;
+    // end = start - 1 + 258;
     // skip 7 bits + 258 bytes
 
-    start = end + 1;
-    end = start - 1 + 1;
+    update_start_end(&mut start, &mut end, 1);
+    // start = end + 1;
+    // end = start - 1 + 1;
     let tracks_number: u8 = buffer[start];
 
     let mut tracks: Vec<Track> = Vec::default();
@@ -250,48 +274,57 @@ pub fn parse_block_cue_sheet(buffer: Vec<u8>) -> io::Result<BlockCueSheet> {
     while i < tracks_number {
         i += 1;
         // let mut track = Track::default();
-        start = end + 1;
-        end = start - 1 + 8;
+        update_start_end(&mut start, &mut end, 8);
+        // start = end + 1;
+        // end = start - 1 + 8;
         let offset: u64 = parse_8_bytes_with_big_endian(&buffer[start..=end]);
 
-        start = end + 1;
-        end = start - 1 + 1;
+        update_start_end(&mut start, &mut end, 1);
+        // start = end + 1;
+        // end = start - 1 + 1;
         let number = buffer[start];
 
-        start = end + 1;
-        end = start - 1 + 12;
+        update_start_end(&mut start, &mut end, 12);
+        // start = end + 1;
+        // end = start - 1 + 12;
         let isrc = String::from_utf8(buffer[start..=end].to_vec())
             .to_owned()
             .unwrap();
-
-        start = end + 1;
-        end = start - 1 + 1;
+        
+        update_start_end(&mut start, &mut end, 1);
+        // start = end + 1;
+        // end = start - 1 + 1;
         let is_audio_track: bool = ((buffer[start] & 0x80) >> 7) == 0;
 
         let pre_emphasis: bool = ((buffer[start] & 0x40) >> 6) == 1;
 
-        start = end + 1;
-        end = start - 1 + 13;
+        update_start_end(&mut start, &mut end, 13);
+        // start = end + 1;
+        // end = start - 1 + 13;
         // skip 6 bits and 13 bytes
 
-        start = end + 1;
-        end = start - 1 + 1;
+        update_start_end(&mut start, &mut end, 1);
+        // start = end + 1;
+        // end = start - 1 + 1;
         let track_index_points_number: u8 = buffer[start];
 
         let mut j = 0;
         let mut track_indices: Vec<TrackIndex> = Vec::default();
         while j < track_index_points_number {
             j += 1;
-            start = end + 1;
-            end = start - 1 + 8;
+            update_start_end(&mut start, &mut end, 8);
+            // start = end + 1;
+            // end = start - 1 + 8;
             let index_offset = parse_8_bytes_with_big_endian(&buffer[start..=end]);
 
-            start = end + 1;
-            end = start - 1 + 1;
+            update_start_end(&mut start, &mut end, 1);
+            // start = end + 1;
+            // end = start - 1 + 1;
             let index_point_number = buffer[start];
 
-            start = end + 1;
-            end = start - 1 + 3;
+            update_start_end(&mut start, &mut end, 3);
+            // start = end + 1;
+            // end = start - 1 + 3;
             // skip 3 bytes
             track_indices.push(TrackIndex::new(index_offset, index_point_number))
         }

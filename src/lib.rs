@@ -1,6 +1,7 @@
 // 如果frame有description不定长字段，如果frame中为空，则设置为String::from("null")
 mod flac;
 mod id3;
+mod ogg;
 mod util;
 
 use std::collections::HashMap;
@@ -21,16 +22,24 @@ use flac::blocks::{
 };
 use flac::core::parse_block_cue_sheet;
 use flac::flac_buffer_reader::FlacBufferReader;
-use id3::{core::{
-    parse_extended_header, parse_footer_buffer, parse_frame_header, parse_frame_payload,
-    parse_protocol_header,
-}, frames::APIC::PicType};
+use id3::{
+    core::{
+        parse_extended_header, parse_footer_buffer, parse_frame_header, parse_frame_payload,
+        parse_protocol_header,
+    },
+    frames::APIC::PicType,
+};
 use id3::{
     error::ID3Error, extended_header::ExtendedHeader, footer::Footer, frames::common::Tape,
     id3_buffer_reader::ID3BufferReader, id3v1_tag::ID3v1, protocol_header::ProtocolHeader,
 };
 
-use util::Buffer;
+use ogg::{
+    ogg_buffer_reader::OggBufferReader,
+    ogg_vorbis_comment::{CommentBody, CommentHeader, HeaderType},
+    page::PageHeader,
+};
+use util::{parse_4_bytes_with_little_endian, Buffer};
 
 use flac::core::{
     parse_block_application, parse_block_header, parse_block_picture, parse_block_seektable,
@@ -64,6 +73,9 @@ where
     T: AsRef<Path>,
 {
     /// Create a new parser.
+    /// 传入一个列表，启动多个线程进行解析：怎么返回值？线程切换成本？
+    /// 用户启动多个线程，每个线程一个ID3Parser
+    /// 异步？对已经确定的Buffer
     pub fn new(fp: T) -> io::Result<Self> {
         let file_size = File::open(&fp)?.metadata()?.len();
         Ok(ID3Parser {
@@ -140,10 +152,11 @@ where
     pub fn parse_id3v1(&mut self) -> io::Result<()> {
         let position = self.file_size - 128;
         let mut buffer_reader = ID3BufferReader::new(&self.fp)?;
-        buffer_reader.seek(position)?;
+        buffer_reader.seek_to(position)?;
         let buffer = buffer_reader.read_id3v1_buffer()?;
         let mut start: usize = 0;
         let header: Vec<u8> = (buffer[start..start + 3]).to_vec();
+        // update_start_end()
         start += 3;
         let title: Vec<u8> = (buffer[start..start + 30]).to_vec();
         start += 30;
@@ -186,7 +199,10 @@ where
             buffer = buffer_reader.read_frame_header_buffer()?;
             match parse_frame_header(&buffer, &self.pheader.major_version) {
                 Ok(v) => {
+                    // 这里可以优化为异步
+                    // 去解析而不等待返回值，接着获取下一个FrameHeader继续解析
                     buffer = buffer_reader.read_frame_payload_buffer(v.size)?;
+                    // 优化为异步
                     match parse_frame_payload(&buffer, &v) {
                         Ok(v) => {
                             self.push(v)?;
@@ -200,7 +216,7 @@ where
                         self.padding_size = self.pheader.size - start;
                         if self.pheader.flags.Footer {
                             // 将reader的指针定位到footer第一个字节
-                            buffer_reader.seek(10 + self.pheader.size as u64)?;
+                            buffer_reader.seek_to(10 + self.pheader.size as u64)?;
                             buffer = buffer_reader.read_footer_buffer()?;
                             self.footer = parse_footer_buffer(&buffer).unwrap();
                         }
@@ -342,23 +358,21 @@ where
         Ok(())
     }
 
-
     /// Get vorbis comment according to query.
-    /// 
+    ///
     /// Return a Vec<String> wrapped in an Option.
     pub fn get(&mut self, query: &str) -> Option<Vec<String>> {
         let upper_query = query.to_uppercase();
         if let Some(index) = self.vorbis_comment.hm.get(&upper_query) {
-            return  Some(self.vorbis_comment.comment[*index].clone());
+            return Some(self.vorbis_comment.comment[*index].clone());
         }
         None
     }
 
-
     /// Given that Vorbis allows for customized key values,
-    /// 
+    ///
     /// there may be key values other than those in common use,
-    /// 
+    ///
     /// so this method is provided to print all key-value pairs.
     pub fn get_all(&mut self) -> io::Result<(Vec<String>, Vec<Vec<String>>)> {
         let mut key_vec: Vec<String> = Vec::default();
@@ -404,5 +418,159 @@ where
         self.picture.clear();
         self.cue_sheet = BlockCueSheet::default();
         self.padding_length = u32::default();
+    }
+}
+
+pub struct OggParser<T>
+where
+    T: AsRef<Path>,
+{
+    fp: T,
+    pub audio_channels: u8,
+    pub audio_sample_rate: u32,
+    pub vorbis_comment: CommentBody,
+    // pub vorbis_comment: Box<dyn FlagTrait>,
+    comment_buffer: Vec<u8>,
+}
+impl<T> OggParser<T>
+where
+    T: AsRef<Path>,
+{
+    pub fn new(fp: T) -> Self {
+        OggParser {
+            fp,
+            audio_channels: u8::default(),
+            audio_sample_rate: u32::default(),
+            // vorbis_comment: Box::new(OggVorbisComment::default()),
+            vorbis_comment: CommentBody::default(),
+            comment_buffer: Vec::default(),
+        }
+    }
+    pub fn parse(&mut self) -> io::Result<()> {
+        let mut buffer_reader = OggBufferReader::new(&self.fp)?;
+        let mut comment_header = CommentHeader::default();
+        // comment缓存
+        // let mut comment_buffer: Vec<u8> = Vec::default();
+        while !comment_header.end {
+            let mut page_header = PageHeader::default();
+            page_header.capture_pattern = String::from_utf8(buffer_reader.read_buffer(4)?).unwrap();
+            page_header.structure_version = buffer_reader.read_one()?;
+            let header_type_flag = buffer_reader.read_one()?;
+            page_header.new_packet = (header_type_flag & 0x01) == 0;
+            page_header.bos = (header_type_flag & 0x02) == 2;
+            page_header.eos = (header_type_flag & 0x04) == 4;
+            page_header.granule_position = buffer_reader.read_buffer(8)?;
+            page_header.serial_number = buffer_reader.read_buffer(4)?;
+            page_header.page_sequence_number = buffer_reader.read_buffer(4)?;
+            page_header.crc_checksum = buffer_reader.read_buffer(4)?;
+            page_header.number_page_segments = buffer_reader.read_one()?;
+            page_header.segment_table =
+                buffer_reader.read_buffer(page_header.number_page_segments as u32)?;
+            let temp = buffer_reader.read_one().unwrap();
+            match temp {
+                0x01 | 0x05 => {
+                    let skip_len: u64 = page_header
+                        .segment_table
+                        .clone()
+                        .into_iter()
+                        .map(|x| x as u64)
+                        .sum();
+                    buffer_reader.skip(skip_len - 1)?;
+                    continue;
+                }
+                _ => {}
+            }
+            let mut packets: Vec<u32> = Vec::new();
+            packets.push(0);
+            // 此页有几个包，包的长度是多少
+            for (i, ele) in page_header.segment_table.into_iter().enumerate() {
+                // 非0xFF
+                if ele != 0xFF {
+                    *packets.last_mut().unwrap() += ele as u32;
+                    if i != page_header.number_page_segments as usize - 1 {
+                        packets.push(0);
+                    }
+                } else {
+                    *packets.last_mut().unwrap() += 0xFF;
+                }
+            }
+            // 第一个包长度-1
+            packets[0] -= 0x01;
+            // 是一个新包，并且有区段，并且第一个字节是0x03
+            if page_header.new_packet && page_header.number_page_segments > 0 && temp == 0x03 {
+                // 将所有数据读入
+                for len in packets {
+                    self.comment_buffer
+                        .append(buffer_reader.read_buffer(len)?.as_mut());
+                }
+                // 进入下一页
+            } else {
+                // 是继承包
+                self.comment_buffer.push(temp);
+                for len in packets {
+                    self.comment_buffer
+                        .append(buffer_reader.read_buffer(len)?.as_mut());
+                    while *self.comment_buffer.last().unwrap() == 0x00 {
+                        self.comment_buffer.pop();
+                    }
+                    if *self.comment_buffer.last().unwrap() == 0x01 {
+                        self.comment_buffer.pop();
+                        comment_header.end = true;
+                        break;
+                    }
+                }
+            }
+        }
+        comment_header.header_type = HeaderType::CommentHeader;
+        comment_header.packet_pattern = String::from_utf8(self.vec_reader(0, 6).to_vec()).unwrap();
+        let company_info_length: usize =
+            parse_4_bytes_with_little_endian(self.vec_reader(6, 4)) as usize;
+        comment_header.company_info =
+            String::from_utf8(self.vec_reader(10, company_info_length).to_vec()).unwrap();
+        let mut start: usize = 10 + company_info_length + 4;
+        while self.comment_buffer.len() - start > 1 {
+            let comment_i_length: usize =
+                parse_4_bytes_with_little_endian(self.vec_reader(start, 4)) as usize;
+            start += 4;
+            let comment_i_content =
+                String::from_utf8(self.vec_reader(start, comment_i_length).to_vec()).unwrap();
+            start += comment_i_length;
+            // store(&mut self.vorbis_comment, comment_i_content);
+            // self.vorbis_comment.store(comment_i_content);
+            let kv: Vec<&str> = comment_i_content.split('=').collect();
+            let comment_key = kv[0];
+            let comment_value: String = kv[1].to_owned();
+            if let Some(index) = self.vorbis_comment.hm.get(comment_key) {
+                self.vorbis_comment.comment[*index].push(comment_value);
+            } else {
+                let comment_index = self.vorbis_comment.comment.len();
+                self.vorbis_comment
+                    .hm
+                    .insert(comment_key.to_uppercase(), comment_index);
+                self.vorbis_comment.comment.push(Vec::default());
+                self.vorbis_comment.comment[comment_index].push(comment_value);
+            }
+        }
+        Ok(())
+    }
+    // return buffer
+    fn vec_reader(&self, start: usize, length: usize) -> &[u8] {
+        &self.comment_buffer[start..start + length]
+    }
+    pub fn get(&mut self, query: &str) -> Option<Vec<String>> {
+        let upper_query = query.to_uppercase();
+        if let Some(index) = self.vorbis_comment.hm.get(&upper_query) {
+            return Some(self.vorbis_comment.comment[*index].clone());
+        }
+        None
+    }
+    pub fn get_all(&mut self) -> io::Result<(Vec<String>, Vec<Vec<String>>)> {
+        let mut key_vec: Vec<String> = Vec::default();
+        let mut value_vec: Vec<Vec<String>> = Vec::default();
+        for (key, index) in &self.vorbis_comment.hm {
+            key_vec.push(key.to_string());
+            value_vec.push(self.vorbis_comment.comment[*index].clone());
+        }
+        Ok((key_vec, value_vec))
     }
 }

@@ -1,4 +1,4 @@
-use music_metadata::{FlacParser, ID3Parser};
+use music_metadata::{FlacParser, ID3Parser, OggParser};
 fn main() -> std::io::Result<()> {
     // https://drive.google.com/file/d/1fp_TYclIKZAWMwFTnxEEe4PqJCuBqHl4/view?usp=sharing
     let mut id3_parser = ID3Parser::new("云烟成雨.mp3").unwrap();
@@ -44,12 +44,15 @@ fn main() -> std::io::Result<()> {
     let (k, v) = flac_parser.get_all().unwrap();
     let mut index = 0;
     while index < k.len() {
-        println!("vorbis key = {:?}, vorbis comment = {:?}", k[index], v[index]);
+        println!(
+            "vorbis key = {:?}, vorbis comment = {:?}",
+            k[index], v[index]
+        );
         index += 1;
     }
 
     // It is not recommended to print the APIC byte sequence because it is really long
-    println!("picture_raw_data = {:?}", flac_parser.picture[0].data);
+    // println!("picture_raw_data = {:?}", flac_parser.picture[0].data);
 
     println!("md5 = {}", flac_parser.stream_info.md5);
 
@@ -59,11 +62,16 @@ fn main() -> std::io::Result<()> {
         flac_parser.picture[0].height,
         flac_parser.picture[0].pic_type
     );
-    
+
     // This will write image[s] to disk
     // Naming rules: <filename>_flac_<picture_type>[_index].jpg
     flac_parser.write_image()?;
 
     flac_parser.change_target("千千阙歌.flac");
+
+
+    let mut ogg_parser = OggParser::new("xhh.ogg");
+    ogg_parser.parse()?;
+    println!("ogg_vorbis_comment = {:?}", ogg_parser.get_all());
     Ok(())
 }

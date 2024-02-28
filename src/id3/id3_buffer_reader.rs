@@ -51,7 +51,7 @@ impl ID3BufferReader {
     }
 
     /// absolute position from file start
-    pub fn seek(&mut self, location: u64) -> io::Result<u64>{
+    pub fn seek_to(&mut self, location: u64) -> io::Result<u64>{
         self.file.seek(io::SeekFrom::Start(location))
     }
 }
